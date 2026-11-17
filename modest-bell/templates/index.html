@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AgroAI - Diagnóstico de Hojas de Papa</title>
+  <!-- Favicon idéntico al icono de la app (Brote / Planta con gradiente esmeralda) -->
+  <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+  <link rel="alternate icon" href="/favicon.ico">
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#f0fdf4',
+              100: '#dcfce7',
+              500: '#22c55e',
+              600: '#16a34a',
+              700: '#15803d',
+              800: '#166534',
+              900: '#14532d',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    @keyframes scan {
+      0% { top: 0%; opacity: 0.8; }
+      50% { top: 95%; opacity: 1; }
+      100% { top: 0%; opacity: 0.8; }
+    }
+    .scanner-line {
+      position: absolute;
+      left: 0;
+      right: 0;
+      height: 3px;
+      background: linear-gradient(90deg, transparent, #22c55e, #10b981, transparent);
+      box-shadow: 0 0 15px #10b981;
+      animation: scan 2s infinite ease-in-out;
+    }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col font-sans">
+
+  <!-- Encabezado / Barra superior -->
+  <header class="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-sm">
+    <div class="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
+      <div class="flex items-center space-x-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-emerald-600 to-green-500 flex items-center justify-center text-white shadow-md shadow-emerald-500/20">
+          <i class="fa-solid fa-seedling text-lg"></i>
+        </div>
+        <div>
+          <h1 class="text-lg font-bold text-slate-900 leading-tight">AgroScan AI</h1>
+          <p class="text-xs text-slate-500 font-medium">Diagnóstico de Patologías en Papa (.keras)</p>
+        </div>
+      </div>
+
+      <!-- Estado del Modelo Keras -->
+      <div class="flex items-center space-x-2">
+        {% if has_model %}
+        <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200">
+          <span class="w-2 h-2 mr-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+          Modelo Activo: {{ model_name }}
+        </span>
+        {% else %}
+        <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-800 border border-amber-200" title="Coloca tu archivo .keras en la carpeta /models">
+          <span class="w-2 h-2 mr-1.5 rounded-full bg-amber-500"></span>
+          Modo Demo (Pega tu .keras en /models)
+        </span>
+        {% endif %}
+      </div>
+    </div>
+  </header>
+
+  <!-- Contenedor Principal -->
+  <main class="flex-1 max-w-6xl w-full mx-auto p-4 sm:p-6 lg:p-8">
+
+    <!-- Banner informativo si no hay modelo .keras colocado -->
+    {% if not has_model %}
+    <div class="mb-6 p-4 rounded-xl bg-amber-50 border border-amber-200 flex items-start space-x-3 text-amber-800 text-sm">
+      <i class="fa-solid fa-circle-info text-amber-600 text-base mt-0.5"></i>
+      <div>
+        <p class="font-semibold">¿Dónde colocar tu archivo del modelo?</p>
+        <p class="text-amber-700 mt-0.5">
+          Para usar tus pesos reales recién entrenados, copia tu archivo <code class="bg-amber-100 px-1.5 py-0.5 rounded text-amber-900 font-mono text-xs">mejor_modelo_papa_cnn.keras</code> dentro de la carpeta <code class="bg-amber-100 px-1.5 py-0.5 rounded text-amber-900 font-mono text-xs">models/</code> de este proyecto. ¡La aplicación lo detectará automáticamente!
+        </p>
+      </div>
+    </div>
+    {% endif %}
+
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+      
+      <!-- COLUMNA IZQUIERDA: Formulario de Carga y Previsualización (5 columnas) -->
+      <div class="lg:col-span-5 bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+        <h2 class="text-base font-bold text-slate-900 mb-1 flex items-center gap-2">
+          <i class="fa-solid fa-cloud-arrow-up text-emerald-600"></i>
+          Subir Fotografía de la Hoja
+        </h2>
+        <p class="text-xs text-slate-500 mb-4">Soporta formatos JPG, PNG o WEBP de hojas de cultivo.</p>
+
+        <!-- Formulario Interactivo -->
+        <form id="uploadForm" class="space-y-4">
+          <!-- Zona Dropzone -->
+          <div id="dropZone" class="relative group border-2 border-dashed border-slate-300 hover:border-emerald-500 transition-all rounded-xl p-6 text-center cursor-pointer bg-slate-50 hover:bg-emerald-50/30 flex flex-col items-center justify-center min-h-[220px]">
+            <input type="file" id="fileInput" name="file" accept="image/*" class="hidden">
+            
+            <!-- Vista vacía (placeholder) -->
+            <div id="placeholderView" class="flex flex-col items-center space-y-3">
+              <div class="w-14 h-14 rounded-full bg-slate-100 group-hover:bg-emerald-100 flex items-center justify-center text-slate-400 group-hover:text-emerald-600 transition-colors">
+                <i class="fa-regular fa-image text-2xl"></i>
+              </div>
+              <div>
+                <p class="text-sm font-semibold text-slate-700 group-hover:text-emerald-700">Arrastra una imagen aquí</p>
+                <p class="text-xs text-slate-400 mt-1">o haz clic para explorar tus archivos</p>
+              </div>
+              <span class="inline-block px-2.5 py-1 text-[11px] font-medium bg-white text-slate-500 rounded border border-slate-200 shadow-2xs">
+                Máximo 10 MB
+              </span>
+            </div>
+
+            <!-- Vista con previsualización -->
+            <div id="previewView" class="hidden relative w-full h-full flex flex-col items-center">
+              <div class="relative max-h-56 w-full rounded-lg overflow-hidden bg-slate-900 flex items-center justify-center shadow-inner">
+                <img id="imagePreview" src="#" alt="Previsualización" class="max-h-56 w-auto object-contain">
+                <!-- Efecto Escáner animado durante predicción -->
+                <div id="scannerOverlay" class="hidden absolute inset-0 bg-emerald-950/20 backdrop-blur-[1px]">
+                  <div class="scanner-line"></div>
+                  <div class="absolute inset-0 flex items-center justify-center">
+                    <span class="bg-black/70 text-emerald-400 text-xs font-semibold px-3 py-1.5 rounded-full flex items-center gap-2">
+                      <i class="fa-solid fa-spinner fa-spin"></i> Analizando con Red Neuronal...
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <p id="fileNameText" class="text-xs text-slate-500 mt-2 truncate max-w-[260px] font-mono"></p>
+            </div>
+          </div>
+
+          <!-- Botones de Acción -->
+          <div class="flex gap-2">
+            <button type="button" id="clearBtn" class="hidden flex-1 py-2.5 px-4 rounded-xl border border-slate-200 text-slate-600 font-semibold text-xs hover:bg-slate-50 transition-colors">
+              <i class="fa-solid fa-trash mr-1"></i> Quitar
+            </button>
+            <button type="submit" id="submitBtn" disabled class="flex-1 py-2.5 px-4 rounded-xl bg-slate-200 text-slate-400 font-semibold text-xs cursor-not-allowed transition-all flex items-center justify-center gap-2 shadow-sm">
+              <i class="fa-solid fa-microscope text-sm"></i>
+              <span>Diagnosticar Hoja</span>
+            </button>
+          </div>
+        </form>
+
+        <!-- Información de clases soportadas -->
+        <div class="mt-6 pt-5 border-t border-slate-100">
+          <p class="text-xs font-semibold text-slate-700 uppercase tracking-wider mb-2">Patologías Evaluadas:</p>
+          <div class="space-y-1.5 text-xs text-slate-600">
+            <div class="flex items-center gap-2">
+              <span class="w-2.5 h-2.5 rounded-full bg-amber-500"></span>
+              <span class="font-medium text-slate-800">Tizón Temprano</span>
+              <span class="text-slate-400 text-[11px] italic">(Alternaria solani)</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="w-2.5 h-2.5 rounded-full bg-red-500"></span>
+              <span class="font-medium text-slate-800">Tizón Tardío</span>
+              <span class="text-slate-400 text-[11px] italic">(Phytophthora infestans)</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+              <span class="font-medium text-slate-800">Planta Sana</span>
+              <span class="text-slate-400 text-[11px] italic">(Follaje Saludable)</span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- COLUMNA DERECHA: Resultados del Diagnóstico (7 columnas) -->
+      <div class="lg:col-span-7 space-y-6">
+        
+        <!-- Estado Inicial: Esperando Imagen -->
+        <div id="emptyResultState" class="bg-white p-10 rounded-2xl shadow-sm border border-slate-200 text-center flex flex-col items-center justify-center min-h-[380px]">
+          <div class="w-16 h-16 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center mb-4 text-2xl">
+            <i class="fa-solid fa-leaf"></i>
+          </div>
+          <h3 class="text-base font-bold text-slate-800 mb-1">Sin diagnóstico generado</h3>
+          <p class="text-xs text-slate-500 max-w-sm">
+            Sube o arrastra una fotografía de una hoja de papa en el panel izquierdo y presiona <b>Diagnosticar Hoja</b> para obtener la clasificación fitosanitaria en tiempo real.
+          </p>
+        </div>
+
+        <!-- Panel de Resultado Activo (Oculto inicialmente) -->
+        <div id="activeResultState" class="hidden space-y-6">
+
+          <!-- Tarjeta de Diagnóstico Principal -->
+          <div id="resultCard" class="bg-white rounded-2xl shadow-sm border overflow-hidden transition-all">
+            <!-- Barra superior coloreada según enfermedad -->
+            <div id="cardHeader" class="px-6 py-4 border-b flex items-center justify-between">
+              <div>
+                <span id="severityBadge" class="inline-block px-2.5 py-0.5 rounded-full text-[11px] font-bold tracking-wide uppercase mb-1"></span>
+                <h3 id="diseaseTitle" class="text-xl font-extrabold text-slate-900 tracking-tight"></h3>
+                <p id="scientificTitle" class="text-xs italic text-slate-500"></p>
+              </div>
+
+              <!-- Círculo de Certeza / Confianza -->
+              <div class="text-right">
+                <span class="text-xs text-slate-400 block font-medium">Nivel de Confianza</span>
+                <span id="confidenceText" class="text-2xl font-black text-slate-900">0%</span>
+              </div>
+            </div>
+
+            <!-- Cuerpo del Resultado -->
+            <div class="p-6 space-y-5">
+              <!-- Descripción Patológica -->
+              <div>
+                <h4 class="text-xs font-bold text-slate-700 uppercase tracking-wider mb-1 flex items-center gap-1.5">
+                  <i class="fa-solid fa-notes-medical text-slate-500"></i> Descripción y Síntomas
+                </h4>
+                <p id="diseaseDesc" class="text-sm text-slate-600 leading-relaxed bg-slate-50 p-3.5 rounded-xl border border-slate-100"></p>
+              </div>
+
+              <!-- Recomendaciones Agronómicas -->
+              <div>
+                <h4 class="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                  <i class="fa-solid fa-clipboard-check text-emerald-600"></i> Medidas Recomendadas
+                </h4>
+                <ul id="recommendationsList" class="space-y-2 text-xs text-slate-700"></ul>
+              </div>
+            </div>
+          </div>
+
+          <!-- Desglose Porcentual de Todas las Clases -->
+          <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+            <h4 class="text-xs font-bold text-slate-700 uppercase tracking-wider mb-3 flex items-center justify-between">
+              <span>Distribución de Probabilidades del Modelo</span>
+              <i class="fa-solid fa-chart-simple text-slate-400"></i>
+            </h4>
+            <div id="probabilityBars" class="space-y-3">
+              <!-- Se rellena dinámicamente con JavaScript -->
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+
+    </div>
+  </main>
+
+  <!-- Pie de Página -->
+  <footer class="bg-white border-t border-slate-200 mt-auto py-4 text-center text-xs text-slate-400">
+    <p>Detector de Patologías Agrícolas • Inferencia mediante Red Neuronal Convolucional (.keras)</p>
+  </footer>
+
+  <!-- Lógica JavaScript del Frontend -->
+  <script>
+    const dropZone = document.getElementById('dropZone');
+    const fileInput = document.getElementById('fileInput');
+    const placeholderView = document.getElementById('placeholderView');
+    const previewView = document.getElementById('previewView');
+    const imagePreview = document.getElementById('imagePreview');
+    const fileNameText = document.getElementById('fileNameText');
+    const submitBtn = document.getElementById('submitBtn');
+    const clearBtn = document.getElementById('clearBtn');
+    const uploadForm = document.getElementById('uploadForm');
+    const scannerOverlay = document.getElementById('scannerOverlay');
+
+    const emptyResultState = document.getElementById('emptyResultState');
+    const activeResultState = document.getElementById('activeResultState');
+
+    let currentFile = null;
+
+    // Manejo de clic en Dropzone
+    dropZone.addEventListener('click', () => fileInput.click());
+
+    // Drag & Drop
+    dropZone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      dropZone.classList.add('border-emerald-500', 'bg-emerald-50/40');
+    });
+
+    ['dragleave', 'dragend'].forEach(type => {
+      dropZone.addEventListener(type, () => {
+        dropZone.classList.remove('border-emerald-500', 'bg-emerald-50/40');
+      });
+    });
+
+    dropZone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dropZone.classList.remove('border-emerald-500', 'bg-emerald-50/40');
+      if (e.dataTransfer.files.length > 0) {
+        handleFileSelection(e.dataTransfer.files[0]);
+      }
+    });
+
+    fileInput.addEventListener('change', (e) => {
+      if (e.target.files.length > 0) {
+        handleFileSelection(e.target.files[0]);
+      }
+    });
+
+    function handleFileSelection(file) {
+      if (!file.type.startsWith('image/')) {
+        alert('Por favor selecciona un archivo de imagen válido (JPG, PNG o WEBP).');
+        return;
+      }
+      currentFile = file;
+      fileNameText.textContent = `${file.name} (${(file.size / 1024).toFixed(1)} KB)`;
+
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        imagePreview.src = e.target.result;
+        placeholderView.classList.add('hidden');
+        previewView.classList.remove('hidden');
+        clearBtn.classList.remove('hidden');
+
+        // Habilitar botón de enviar
+        submitBtn.disabled = false;
+        submitBtn.classList.remove('bg-slate-200', 'text-slate-400', 'cursor-not-allowed');
+        submitBtn.classList.add('bg-emerald-600', 'hover:bg-emerald-700', 'text-white', 'shadow-emerald-600/20');
+      };
+      reader.readAsDataURL(file);
+    }
+
+    clearBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      fileInput.value = '';
+      currentFile = null;
+      placeholderView.classList.remove('hidden');
+      previewView.classList.add('hidden');
+      clearBtn.classList.add('hidden');
+
+      submitBtn.disabled = true;
+      submitBtn.classList.add('bg-slate-200', 'text-slate-400', 'cursor-not-allowed');
+      submitBtn.classList.remove('bg-emerald-600', 'hover:bg-emerald-700', 'text-white', 'shadow-emerald-600/20');
+
+      emptyResultState.classList.remove('hidden');
+      activeResultState.classList.add('hidden');
+    });
+
+    // Envío asíncrono con Fetch API
+    uploadForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      if (!currentFile) return;
+
+      const formData = new FormData();
+      formData.append('file', currentFile);
+
+      // Activar escáner y deshabilitar botón
+      scannerOverlay.classList.remove('hidden');
+      submitBtn.disabled = true;
+      submitBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i><span>Analizando...</span>';
+
+      try {
+        const response = await fetch('/predict', {
+          method: 'POST',
+          body: formData
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.error || 'Error al procesar la imagen');
+        }
+
+        renderResults(data);
+
+      } catch (err) {
+        alert('Ocurrió un error en el diagnóstico: ' + err.message);
+      } finally {
+        scannerOverlay.classList.add('hidden');
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = '<i class="fa-solid fa-microscope text-sm"></i><span>Diagnosticar Hoja</span>';
+      }
+    });
+
+    function renderResults(data) {
+      emptyResultState.classList.add('hidden');
+      activeResultState.classList.remove('hidden');
+
+      const pred = data.prediction;
+      const cardHeader = document.getElementById('cardHeader');
+      const severityBadge = document.getElementById('severityBadge');
+      const diseaseTitle = document.getElementById('diseaseTitle');
+      const scientificTitle = document.getElementById('scientificTitle');
+      const confidenceText = document.getElementById('confidenceText');
+      const diseaseDesc = document.getElementById('diseaseDesc');
+      const recommendationsList = document.getElementById('recommendationsList');
+      const probabilityBars = document.getElementById('probabilityBars');
+
+      // Títulos
+      diseaseTitle.textContent = pred.disease_name;
+      scientificTitle.textContent = pred.scientific_name;
+      confidenceText.textContent = `${Number(pred.confidence).toFixed(5)}%`;
+      diseaseDesc.textContent = pred.description;
+
+      // Colores según severidad
+      if (pred.color === 'emerald') {
+        cardHeader.className = 'px-6 py-4 border-b flex items-center justify-between bg-emerald-50/50 border-emerald-100';
+        severityBadge.className = 'inline-block px-2.5 py-0.5 rounded-full text-[11px] font-bold tracking-wide uppercase mb-1 bg-emerald-100 text-emerald-800';
+        severityBadge.textContent = 'Saludable';
+        confidenceText.className = 'text-2xl font-black text-emerald-600';
+      } else if (pred.color === 'amber') {
+        cardHeader.className = 'px-6 py-4 border-b flex items-center justify-between bg-amber-50/50 border-amber-100';
+        severityBadge.className = 'inline-block px-2.5 py-0.5 rounded-full text-[11px] font-bold tracking-wide uppercase mb-1 bg-amber-100 text-amber-800';
+        severityBadge.textContent = 'Riesgo Moderado';
+        confidenceText.className = 'text-2xl font-black text-amber-600';
+      } else {
+        cardHeader.className = 'px-6 py-4 border-b flex items-center justify-between bg-red-50/50 border-red-100';
+        severityBadge.className = 'inline-block px-2.5 py-0.5 rounded-full text-[11px] font-bold tracking-wide uppercase mb-1 bg-red-100 text-red-800';
+        severityBadge.textContent = 'Riesgo Alto / Crítico';
+        confidenceText.className = 'text-2xl font-black text-red-600';
+      }
+
+      // Lista de recomendaciones
+      recommendationsList.innerHTML = '';
+      pred.recommendations.forEach(rec => {
+        const li = document.createElement('li');
+        li.className = 'flex items-start gap-2 bg-slate-50 p-2.5 rounded-lg border border-slate-100';
+        li.innerHTML = `
+          <i class="fa-solid fa-check text-emerald-500 mt-0.5 text-xs"></i>
+          <span>${rec}</span>
+        `;
+        recommendationsList.appendChild(li);
+      });
+
+      // Barras de desglose
+      probabilityBars.innerHTML = '';
+      data.breakdown.forEach(item => {
+        const barDiv = document.createElement('div');
+        barDiv.className = 'space-y-1';
+
+        let barBg = 'bg-slate-500';
+        if (item.color === 'emerald') barBg = 'bg-emerald-500';
+        if (item.color === 'amber') barBg = 'bg-amber-500';
+        if (item.color === 'red') barBg = 'bg-red-500';
+
+        barDiv.innerHTML = `
+          <div class="flex justify-between text-xs">
+            <span class="font-semibold text-slate-700">${item.name}</span>
+            <span class="font-bold text-slate-900 font-mono">${Number(item.probability).toFixed(5)}%</span>
+          </div>
+          <div class="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden">
+            <div class="${barBg} h-2.5 rounded-full transition-all duration-700 ease-out" style="width: ${item.probability}%"></div>
+          </div>
+        `;
+        probabilityBars.appendChild(barDiv);
+      });
+
+      // Scroll suave a los resultados en móviles
+      if (window.innerWidth < 1024) {
+        activeResultState.scrollIntoView({ behavior: 'smooth' });
+      }
+    }
+  </script>
+</body>
+</html>
