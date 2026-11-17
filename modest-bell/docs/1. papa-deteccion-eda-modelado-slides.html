@@ -1,0 +1,952 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>97,84 % en test: el error vive entre la hoja sana y el tizón tardío — Slides</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23f4f5f3'/%3E%3Cpath d='M18 40V24l14-8 14 8v16l-14 8-14-8Z' fill='none' stroke='%232f6b3c' stroke-width='4' stroke-linejoin='round'/%3E%3Ccircle cx='32' cy='32' r='5' fill='%23b0341e'/%3E%3C/svg%3E">
+<script>document.documentElement.classList.add('js');</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    color-scheme: light;
+    --font-display: 'Geist', 'Segoe UI', sans-serif;
+    --font-body: 'Geist', 'Segoe UI', sans-serif;
+    --font-mono: 'Geist Mono', ui-monospace, monospace;
+    --bg: #f4f5f3;
+    --surface: #ffffff;
+    --border: #dfe3e0;
+    --border-bright: #888e8b;
+    --text: #121614;
+    --text-dim: #545e59;
+    --accent: #2f6b3c;
+    --accent-dim: rgba(47, 107, 60, .11);
+    --ok: #1c7443;
+    --warn: #7a5e00;
+    --risk: #b0341e;
+    --info: #1a6890;
+    --c-early: #b57b1c;
+    --c-late: #8d3c28;
+    --c-health: #2f6b3c;
+    --stage: radial-gradient(circle at 1px 1px, rgba(18, 22, 20, .09) 1px, transparent 1.5px) 0 0 / 20px 20px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: var(--font-body);
+    color: var(--text);
+    background: var(--bg);
+    background-image: var(--stage);
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+  }
+  ::selection { background: var(--accent-dim); }
+
+  /* ===== ENGINE ===== */
+  .deck { height: 100dvh; overflow-y: auto; scroll-snap-type: y mandatory; scroll-behavior: smooth; }
+  .slide {
+    height: 100dvh; scroll-snap-align: start; overflow: hidden; position: relative; isolation: isolate;
+    display: flex; flex-direction: column; justify-content: center; gap: clamp(14px, 2.2vh, 24px);
+    padding: clamp(32px, 5.5vh, 72px) clamp(28px, 7vw, 112px);
+    transition: opacity .6s cubic-bezier(.16,1,.3,1), transform .6s cubic-bezier(.16,1,.3,1);
+  }
+  .js .slide { opacity: 0; transform: translateY(32px); }
+  .slide.visible { opacity: 1; transform: none; }
+  .js .slide .reveal { opacity: 0; transform: translateY(12px); transition: opacity .5s, transform .5s; }
+  .slide.visible .reveal { opacity: 1; transform: none; }
+  .slide.visible .reveal:nth-child(2) { transition-delay: .08s; }
+  .slide.visible .reveal:nth-child(3) { transition-delay: .16s; }
+  .slide.visible .reveal:nth-child(4) { transition-delay: .24s; }
+
+  /* ===== DELIVERY CHECK: reduced motion doubles as the fit test ===== */
+  @media (prefers-reduced-motion: reduce) {
+    .deck { scroll-behavior: auto; }
+    .slide, .slide .reveal { opacity: 1 !important; transform: none !important; transition: none !important; }
+    .slide[data-slide-check] { outline: 4px solid var(--risk); outline-offset: -4px; }
+    .slide[data-slide-check="auto-fit"] { outline-color: var(--accent); }
+    .slide[data-slide-check]::after {
+      content: attr(data-slide-check-label); position: absolute; top: 12px; left: 50%; transform: translateX(-50%);
+      z-index: 20; padding: 6px 10px; border-radius: 4px; color: var(--bg); background: var(--risk); font: 600 12px/1.2 var(--font-mono); pointer-events: none;
+    }
+    .slide[data-slide-check="auto-fit"]::after { background: var(--accent); }
+  }
+
+  /* ===== CHROME ===== */
+  .deck-progress { position: fixed; top: 0; left: 0; height: 2px; background: var(--accent); z-index: 100; transition: width .3s; pointer-events: none; }
+  .deck-dots {
+    position: fixed; right: clamp(12px, 2vw, 24px); top: 50%; transform: translateY(-50%); z-index: 100;
+    display: flex; flex-direction: column; align-items: flex-end; gap: 3px; padding: 6px; width: 32px;
+    max-height: min(74dvh, 580px); overflow-y: auto; border-radius: 10px;
+    background: color-mix(in srgb, var(--bg) 78%, transparent); backdrop-filter: blur(6px); transition: width .2s;
+  }
+  .deck-dots:hover, .deck-dots:focus-within { align-items: stretch; width: min(260px, calc(100vw - 32px)); border: 1px solid var(--border); }
+  .deck-dot {
+    display: grid; grid-template-columns: 8px minmax(0,1fr); align-items: center; gap: 0; width: 20px; min-height: 20px;
+    padding: 4px 6px; border: 0; border-radius: 4px; background: transparent; color: var(--text-dim);
+    font: 500 12px/1.2 var(--font-mono); text-align: left; cursor: pointer;
+  }
+  .deck-dot::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: currentColor; opacity: .5; justify-self: center; }
+  .deck-dot-label { max-width: 0; overflow: hidden; opacity: 0; white-space: nowrap; text-overflow: ellipsis; transition: max-width .2s, opacity .2s; }
+  .deck-dots:hover .deck-dot, .deck-dots:focus-within .deck-dot { gap: 10px; width: 100%; }
+  .deck-dots:hover .deck-dot-label, .deck-dots:focus-within .deck-dot-label { max-width: 200px; opacity: 1; }
+  .deck-dot:hover { color: var(--text); }
+  .deck-dot[aria-current="true"] { color: var(--accent); }
+  .deck-dot[aria-current="true"]::before { opacity: 1; transform: scale(1.4); }
+  .deck-dot:focus-visible, .deck-panel__button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .deck-counter, .deck-hints { position: fixed; bottom: clamp(12px, 2vh, 24px); z-index: 100; font: 500 12px var(--font-mono); color: var(--text-dim); font-variant-numeric: tabular-nums; }
+  .deck-counter { right: clamp(16px, 2vw, 28px); }
+  .deck-hints { left: 50%; transform: translateX(-50%); transition: opacity .5s; white-space: nowrap; }
+  .deck-hints.faded { opacity: 0; pointer-events: none; }
+  .deck-overlay { position: fixed; inset: 0; z-index: 200; display: none; place-items: center; padding: 24px; background: rgba(18, 22, 20, .35); backdrop-filter: blur(4px); }
+  .deck-overlay.open { display: grid; }
+  .deck-panel { width: min(560px, 86vw); max-height: 80dvh; overflow: auto; padding: 16px 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); font-family: var(--font-mono); box-shadow: 0 24px 64px rgba(18, 22, 20, .18); }
+  .deck-panel:focus { outline: none; }
+  .deck-panel__header { margin: 2px 10px 10px; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--text-dim); }
+  .deck-panel__button { display: flex; gap: 12px; width: 100%; padding: 8px 10px; border: 0; border-radius: 4px; background: transparent; color: inherit; font: 14px/1.3 var(--font-body); text-align: left; cursor: pointer; }
+  .deck-panel__button:hover, .deck-panel__button[aria-current="true"] { background: var(--accent-dim); color: var(--text); }
+  .deck-panel__number { min-width: 22px; font: 500 12px/1.6 var(--font-mono); color: var(--text-dim); font-variant-numeric: tabular-nums; }
+  .deck-help-row { display: flex; justify-content: space-between; gap: 24px; padding: 7px 10px; font-size: 13px; }
+  .deck-help-row kbd { padding: 2px 8px; border: 1px solid var(--border-bright); border-radius: 4px; font: inherit; }
+
+  /* ===== SKIN: Instrument Light ===== */
+  .slide__hero { font: 600 clamp(38px, 6.2vw, 76px)/1.02 var(--font-display); letter-spacing: -.035em; text-wrap: balance; max-width: 17ch; }
+  .slide__hero .num { color: var(--accent); font-variant-numeric: tabular-nums; }
+  .slide__heading { font: 600 clamp(26px, 3.6vw, 44px)/1.1 var(--font-display); letter-spacing: -.025em; text-wrap: balance; max-width: 28ch; }
+  .slide__body { font-size: clamp(18px, 1.8vw, 22px); line-height: 1.45; color: var(--text-dim); max-width: 56ch; text-wrap: pretty; }
+  .slide__label { font: 600 clamp(12px, 1.1vw, 13px) var(--font-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--accent); }
+  .slide__meta { display: flex; flex-wrap: wrap; gap: 12px 24px; padding-top: 14px; border-top: 1px solid var(--border); font: 500 clamp(12px, 1.1vw, 14px) var(--font-mono); color: var(--text-dim); }
+  .slide--title { justify-content: flex-end; }
+  .slide__number { position: absolute; right: clamp(32px, 8vw, 112px); top: 8vh; font: 600 clamp(100px, 18vw, 220px)/.85 var(--font-mono); color: var(--accent); opacity: .16; pointer-events: none; font-variant-numeric: tabular-nums; }
+  .slide__note { font: 400 clamp(14px, 1.3vw, 16px)/1.45 var(--font-body); color: var(--text-dim); max-width: 65ch; }
+
+  /* KPIs */
+  .slide__kpis { display: grid; grid-template-columns: 1.5fr 1fr 1fr 1fr; gap: 1px; background: var(--border); border-block: 1px solid var(--border); }
+  .kpi { background: var(--surface); padding: clamp(14px, 2.5vh, 26px) clamp(12px, 1.8vw, 22px); min-width: 0; }
+  .slide__kpi-val { font: 600 clamp(34px, 4.5vw, 58px)/1 var(--font-display); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .kpi:first-child .slide__kpi-val { font-size: clamp(46px, 6.5vw, 84px); color: var(--accent); letter-spacing: -.03em; }
+  .slide__kpi-val small { font: 500 .38em var(--font-mono); color: var(--text-dim); letter-spacing: 0; margin-left: 2px; }
+  .slide__kpi-label { margin-top: 10px; font: 500 clamp(12px, 1.1vw, 14px) var(--font-mono); color: var(--text-dim); }
+  .slide__kpi-label b { color: var(--ok); font-weight: 600; }
+
+  /* Diagrams & Frames */
+  .diagram-shell { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: clamp(12px, 2vh, 22px); overflow-x: auto; }
+  .ve-svg { width: 100%; height: auto; max-height: 55dvh; display: block; }
+  .fig-t { fill: var(--text); font-family: var(--font-body); font-size: 18px; font-weight: 500; }
+  .fig-t.dim { fill: var(--text-dim); }
+  .fig-t.sm { font-size: 16px; }
+  .fig-t.xs { font-size: 15px; }
+  .fig-t.b { font-weight: 600; }
+  .fig-t.n { font-variant-numeric: tabular-nums; }
+  .ve-axis { stroke: var(--border-bright); stroke-width: 1.5; fill: none; }
+
+  /* Tables */
+  .table-scroll { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: clamp(15px, 1.4vw, 18px); }
+  th, td { text-align: left; padding: clamp(8px, 1.2vh, 13px) clamp(10px, 1.4vw, 16px); border-bottom: 1px solid var(--border); vertical-align: top; }
+  tr:last-child td { border-bottom: 0; }
+  th { font: 600 clamp(12px, 1.1vw, 13px) var(--font-mono); letter-spacing: .06em; text-transform: uppercase; color: var(--text-dim); background: var(--bg); }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; font-family: var(--font-mono); }
+  code { font-family: var(--font-mono); font-size: .9em; background: var(--bg); padding: 2px 6px; border-radius: 4px; border: 1px solid var(--border); }
+
+  /* Chips */
+  .chip { display: inline-block; padding: 2px 8px; border-radius: 4px; font: 600 12px/1.4 var(--font-mono); text-transform: uppercase; letter-spacing: .04em; }
+  .chip.ok { background: rgba(28, 116, 67, .12); color: var(--ok); }
+  .chip.warn { background: rgba(122, 94, 0, .12); color: var(--warn); }
+  .chip.risk { background: rgba(176, 52, 30, .12); color: var(--risk); }
+
+  /* Pipeline steps */
+  .pipe { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+  .pipe .step { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 14px; display: flex; flex-direction: column; gap: 6px; font-size: clamp(16px, 1.4vw, 18px); font-weight: 500; }
+  .pipe .step.custom { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+  .pipe .step .idx { font: 600 12px var(--font-mono); color: var(--text-dim); }
+  .pipe .step .tag { font: 500 13px var(--font-mono); color: var(--text-dim); }
+
+  /* Split & Lists & Cases */
+  .slide__split { display: grid; grid-template-columns: 1.15fr 1fr; gap: clamp(16px, 3vw, 36px); align-items: center; }
+  .slide__list { list-style: none; display: grid; gap: clamp(8px, 1.3vh, 14px); max-width: 64ch; }
+  .slide__list li { font-size: clamp(17px, 1.6vw, 20px); line-height: 1.4; padding-left: 18px; position: relative; color: var(--text); }
+  .slide__list li::before { content: '→'; position: absolute; left: 0; color: var(--accent); font-weight: 600; }
+  .callout { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: clamp(12px, 1.8vh, 18px); display: grid; gap: 8px; }
+  .callout p { font-size: clamp(15px, 1.4vw, 18px); line-height: 1.45; color: var(--text); }
+
+  .cases { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: clamp(12px, 2vw, 20px); }
+  .case { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: clamp(14px, 2vh, 20px); display: grid; gap: 10px; align-content: start; }
+  .case h3 { font-size: clamp(18px, 1.7vw, 22px); font-weight: 600; }
+  .ve-mini { width: 100%; height: auto; max-height: 18dvh; }
+  .sources-line { font: 400 clamp(13px, 1.1vw, 15px)/1.5 var(--font-mono); color: var(--text-dim); overflow-wrap: anywhere; }
+
+  @media (max-height: 700px) {
+    .slide { padding: 24px clamp(24px, 6vw, 64px); gap: 12px; }
+    .slide__number { font-size: 120px; }
+  }
+  @media (max-height: 600px) {
+    .slide { padding: 18px clamp(20px, 5vw, 48px); gap: 10px; }
+    .slide__number { display: none; }
+    .ve-svg { max-height: 48dvh; }
+  }
+  @media (max-height: 500px) { .deck-dots { display: none; } }
+  @media (max-width: 900px) {
+    .slide__kpis { grid-template-columns: 1fr 1fr; }
+    .pipe { grid-template-columns: 1fr 1fr; }
+    .slide__split { grid-template-columns: 1fr; }
+    .cases { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 768px) {
+    .ve-svg { min-width: 680px; }
+  }
+</style>
+</head>
+<body>
+<div class="deck">
+
+  <!-- 01. TITLE -->
+  <section class="slide slide--title">
+    <p class="slide__label reveal">Notebook final · visión por computador · hoja de papa</p>
+    <h1 class="slide__hero reveal"><span class="num">97,84 %</span> en test: el error vive entre la hoja sana y el tizón tardío</h1>
+    <p class="slide__body reveal">Una CNN de 2,39 M de parámetros entrenada desde cero separa dos tizones y una clase sana. Los tizones están resueltos; cinco de los siete errores tocan a la hoja sana.</p>
+    <p class="slide__meta reveal"><span>Potato_Disease_Detection_FINAL.ipynb</span><span>PlantVillage · 2 152 imágenes 256 × 256</span><span>TensorFlow / Keras</span></p>
+  </section>
+
+  <!-- 02. DASHBOARD -->
+  <section class="slide slide--dashboard">
+    <p class="slide__label reveal">Resumen en prueba (n = 324)</p>
+    <h2 class="slide__heading reveal">317 aciertos y 7 errores: cumple el límite de error, roza la meta de accuracy</h2>
+    <div class="slide__kpis reveal">
+      <div class="kpi"><div class="slide__kpi-val">97,84<small>%</small></div><div class="slide__kpi-label">Accuracy test · meta 98,5 %</div></div>
+      <div class="kpi"><div class="slide__kpi-val">7</div><div class="slide__kpi-label">Errores · <b>2,16 %</b> (meta ≤ 3 %)</div></div>
+      <div class="kpi"><div class="slide__kpi-val">95,60<small>%</small></div><div class="slide__kpi-label">F1 macro · test</div></div>
+      <div class="kpi"><div class="slide__kpi-val">2,39<small>M</small></div><div class="slide__kpi-label">Parámetros · desde cero</div></div>
+    </div>
+    <p class="slide__note reveal">Temprano = Early blight (<i>Alternaria solani</i>) · Tardío = Late blight (<i>Phytophthora infestans</i>) · Sana = healthy.</p>
+  </section>
+
+  <!-- 03. FIG 1 CONFUSION MATRIX -->
+  <section class="slide">
+    <p class="slide__label reveal">Fig. 1 · Matriz de confusión en test</p>
+    <h2 class="slide__heading reveal">La clase sana baja 7,6 puntos de recall frente al tizón temprano</h2>
+    <div class="diagram-shell reveal">
+      <svg class="ve-svg" viewBox="0 0 900 350" role="img" aria-label="Matriz de confusión del conjunto de prueba. Diagonal 149, 146 y 22. Errores fuera de la diagonal: 1, 1, 3 y 2.">
+        <text class="fig-t sm dim" x="370" y="34" text-anchor="middle">Predicción</text>
+        <text class="fig-t sm dim" x="148" y="64" text-anchor="end">Real</text>
+        <text class="fig-t sm" x="230" y="60" text-anchor="middle">Temprano</text>
+        <text class="fig-t sm" x="370" y="60" text-anchor="middle">Tardío</text>
+        <text class="fig-t sm" x="510" y="60" text-anchor="middle">Sana</text>
+        <text class="fig-t sm" x="148" y="116" text-anchor="end">Temprano</text>
+        <text class="fig-t sm" x="148" y="191" text-anchor="end">Tardío</text>
+        <text class="fig-t sm" x="148" y="266" text-anchor="end">Sana</text>
+
+        <rect x="160" y="76" width="140" height="72" fill="var(--bg)" stroke="var(--border-bright)" stroke-width="1.5"/>
+        <text class="fig-t b n" x="230" y="118" text-anchor="middle" font-size="28" fill="var(--accent)">149</text>
+        <rect x="161" y="142" width="138" height="4" fill="var(--accent)"/>
+
+        <rect x="300" y="76" width="140" height="72" fill="var(--surface)" stroke="var(--risk)" stroke-width="1.5" stroke-dasharray="5 4"/>
+        <text class="fig-t b n" x="370" y="118" text-anchor="middle" font-size="28" fill="var(--risk)">1</text>
+
+        <rect x="440" y="76" width="140" height="72" fill="var(--surface)" stroke="var(--border)"/>
+        <text class="fig-t n dim" x="510" y="118" text-anchor="middle" font-size="28">0</text>
+
+        <rect x="160" y="148" width="140" height="72" fill="var(--surface)" stroke="var(--risk)" stroke-width="1.5" stroke-dasharray="5 4"/>
+        <text class="fig-t b n" x="230" y="190" text-anchor="middle" font-size="28" fill="var(--risk)">1</text>
+
+        <rect x="300" y="148" width="140" height="72" fill="var(--bg)" stroke="var(--border-bright)" stroke-width="1.5"/>
+        <text class="fig-t b n" x="370" y="190" text-anchor="middle" font-size="28" fill="var(--accent)">146</text>
+        <rect x="301" y="214" width="135" height="4" fill="var(--accent)"/>
+
+        <rect x="440" y="148" width="140" height="72" fill="var(--surface)" stroke="var(--risk)" stroke-width="1.5" stroke-dasharray="5 4"/>
+        <text class="fig-t b n" x="510" y="190" text-anchor="middle" font-size="28" fill="var(--risk)">3</text>
+
+        <rect x="160" y="220" width="140" height="72" fill="var(--surface)" stroke="var(--border)"/>
+        <text class="fig-t n dim" x="230" y="262" text-anchor="middle" font-size="28">0</text>
+
+        <rect x="300" y="220" width="140" height="72" fill="var(--surface)" stroke="var(--risk)" stroke-width="1.5" stroke-dasharray="5 4"/>
+        <text class="fig-t b n" x="370" y="262" text-anchor="middle" font-size="28" fill="var(--risk)">2</text>
+
+        <rect x="440" y="220" width="140" height="72" fill="var(--bg)" stroke="var(--border-bright)" stroke-width="1.5"/>
+        <text class="fig-t b n" x="510" y="262" text-anchor="middle" font-size="28" fill="var(--accent)">22</text>
+        <rect x="441" y="286" width="42" height="4" fill="var(--accent)"/>
+
+        <text class="fig-t sm dim" x="610" y="66">Recall por clase · test</text>
+        <text class="fig-t sm" x="610" y="100">Temprano</text>
+        <text class="fig-t sm n" x="888" y="100" text-anchor="end">99,3 %</text>
+        <rect x="610" y="108" width="278" height="10" rx="2" fill="var(--border)"/>
+        <rect x="610" y="108" width="276" height="10" rx="2" fill="var(--accent)"/>
+
+        <text class="fig-t sm" x="610" y="152">Tardío</text>
+        <text class="fig-t sm n" x="888" y="152" text-anchor="end">97,3 %</text>
+        <rect x="610" y="160" width="278" height="10" rx="2" fill="var(--border)"/>
+        <rect x="610" y="160" width="270" height="10" rx="2" fill="var(--accent)"/>
+
+        <text class="fig-t sm" x="610" y="204">Sana</text>
+        <text class="fig-t sm n" x="888" y="204" text-anchor="end" fill="var(--risk)">91,7 %</text>
+        <rect x="610" y="212" width="278" height="10" rx="2" fill="var(--border)"/>
+        <rect x="610" y="212" width="255" height="10" rx="2" fill="var(--risk)"/>
+
+        <text class="fig-t xs dim" x="610" y="264">3 tardíos se declaran sanos:</text>
+        <text class="fig-t xs" x="610" y="286" fill="var(--risk)">el error más caro en campo.</text>
+      </svg>
+    </div>
+  </section>
+
+  <!-- 04. DIVIDER 01: EDA -->
+  <section class="slide slide--divider">
+    <span class="slide__number" aria-hidden="true">01</span>
+    <p class="slide__label reveal">01 · Análisis exploratorio (EDA)</p>
+    <h2 class="slide__heading reveal">Tres clases con una proporción de 6,6 a 1</h2>
+    <p class="slide__body reveal">El conjunto llega recortado de PlantVillage: 2 152 imágenes de 256 × 256 en RGB. La clase sana, la más crítica en campo, es la que menos ejemplos tiene.</p>
+  </section>
+
+  <!-- 05. FIG 2 DATASET COMPOSITION -->
+  <section class="slide">
+    <p class="slide__label reveal">Fig. 2 · Composición del dataset</p>
+    <h2 class="slide__heading reveal">Cada tizón tiene 6,6 veces más imágenes que la clase sana</h2>
+    <div class="diagram-shell reveal">
+      <svg class="ve-svg" viewBox="0 0 760 170" role="img" aria-label="Composición del dataset: 1000 tizones tempranos, 1000 tardíos y 152 hojas sanas.">
+        <text class="fig-t sm dim" x="20" y="32">2 152 imágenes · 3 clases</text>
+        <text class="fig-t sm b" x="740" y="32" text-anchor="end" fill="var(--risk)">Sana 152 · 7,1 %</text>
+
+        <rect x="20" y="56" width="335" height="46" fill="var(--c-early)" fill-opacity=".22" stroke="var(--c-early)" stroke-width="1.5"/>
+        <rect x="355" y="56" width="335" height="46" fill="var(--c-late)" fill-opacity=".20" stroke="var(--c-late)" stroke-width="1.5"/>
+        <rect x="690" y="56" width="50" height="46" fill="var(--c-health)" fill-opacity=".30" stroke="var(--c-health)" stroke-width="1.5"/>
+
+        <text class="fig-t sm b" x="187" y="85" text-anchor="middle">Temprano · 1 000</text>
+        <text class="fig-t sm b" x="522" y="85" text-anchor="middle">Tardío · 1 000</text>
+
+        <path class="ve-axis" d="M20 110v8M355 110v8M690 110v8M740 110v8"/>
+        <path class="ve-axis" d="M20 114H740"/>
+        <text class="fig-t sm n dim" x="187" y="138" text-anchor="middle">46,5 %</text>
+        <text class="fig-t sm n dim" x="522" y="138" text-anchor="middle">46,5 %</text>
+        <text class="fig-t sm n b" x="715" y="138" text-anchor="middle" fill="var(--risk)">7,1 %</text>
+        <text class="fig-t xs dim" x="715" y="158" text-anchor="middle">1 : 6,6</text>
+      </svg>
+    </div>
+    <p class="slide__note reveal">1 000 imágenes por cada tizón frente a solo 152 hojas sanas.</p>
+  </section>
+
+  <!-- 06. TABLE: AUDITORÍA -->
+  <section class="slide">
+    <p class="slide__label reveal">01 · EDA · Auditoría previa</p>
+    <h2 class="slide__heading reveal">Cinco chequeos producen métricas, no filtros</h2>
+    <div class="table-scroll reveal">
+      <table>
+        <thead><tr><th>Chequeo</th><th>Qué mide</th><th>Resultado</th></tr></thead>
+        <tbody>
+          <tr><td>Resolución y canal</td><td>ancho, alto y modo de las 2 152 imágenes</td><td><span class="chip ok">256 × 256 RGB</span> en el 100 %</td></tr>
+          <tr><td>Peso del archivo</td><td>tamaño en disco</td><td class="num">17,9 KB media · 9,2–24,6 KB</td></tr>
+          <tr><td>Duplicados exactos</td><td>MD5 del archivo</td><td><span class="chip ok">0</span> repetidos</td></tr>
+          <tr><td>Duplicados visuales</td><td>dHash perceptual</td><td><span class="chip ok">0</span> repetidos</td></tr>
+          <tr><td>Nitidez y brillo</td><td>varianza del Laplaciano · media canal V</td><td><span class="chip warn">sin umbral</span> se grafica, no se filtra</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="slide__note reveal">Ninguna imagen se descarta en EDA. El augmentation desenfoca después a propósito para que la nitidez no se vuelva pista de clase.</p>
+  </section>
+
+  <!-- 07. DIVIDER 02: PREPARACIÓN -->
+  <section class="slide slide--divider">
+    <span class="slide__number" aria-hidden="true">02</span>
+    <p class="slide__label reveal">02 · Preparación</p>
+    <h2 class="slide__heading reveal">El split ocurre antes de tocar un píxel</h2>
+    <p class="slide__body reveal">División estratificada 70 / 15 / 15 con semilla 42. El augmentation vive dentro del modelo y se apaga automáticamente en inferencia.</p>
+  </section>
+
+  <!-- 08. FIG 3 SPLIT -->
+  <section class="slide">
+    <p class="slide__label reveal">Fig. 3 · Partición estratificada</p>
+    <h2 class="slide__heading reveal">1 506 imágenes entrenan y 646 se reservan para medir</h2>
+    <div class="diagram-shell reveal">
+      <svg class="ve-svg" viewBox="0 0 760 175" role="img" aria-label="Reparto de 2152 imágenes: 1506 entrenamiento, 322 validación y 324 prueba.">
+        <text class="fig-t sm dim" x="20" y="38">2 152 imágenes</text>
+        <text class="fig-t sm dim" x="740" y="38" text-anchor="end">semilla 42</text>
+        <rect x="20" y="58" width="504" height="46" fill="var(--text-dim)" fill-opacity=".14" stroke="var(--border-bright)"/>
+        <rect x="524" y="58" width="108" height="46" fill="var(--text-dim)" fill-opacity=".22" stroke="var(--border-bright)"/>
+        <rect x="632" y="58" width="108" height="46" fill="var(--accent)" fill-opacity=".25" stroke="var(--accent)" stroke-width="1.5"/>
+        <text class="fig-t sm b" x="272" y="87" text-anchor="middle">Entrenamiento 1 506</text>
+        <text class="fig-t sm b" x="578" y="87" text-anchor="middle">Val 322</text>
+        <text class="fig-t sm b" x="686" y="87" text-anchor="middle">Test 324</text>
+        <path class="ve-axis" d="M20 112v8M524 112v8M632 112v8M740 112v8"/>
+        <path class="ve-axis" d="M20 116H740"/>
+        <text class="fig-t sm n dim" x="272" y="142" text-anchor="middle">70 % · 106 sanas</text>
+        <text class="fig-t sm n dim" x="578" y="142" text-anchor="middle">15 % · 22 sanas</text>
+        <text class="fig-t sm n" x="686" y="142" text-anchor="middle" fill="var(--accent)">15 % · 24 sanas</text>
+      </svg>
+    </div>
+    <p class="slide__note reveal">La clase sana conserva su 7 % en las tres particiones: 106 en entrenamiento, 22 en validación y 24 en prueba.</p>
+  </section>
+
+  <!-- 09. FIG 4 CLASS WEIGHTS -->
+  <section class="slide">
+    <p class="slide__label reveal">Fig. 4 · Pesos de clase</p>
+    <h2 class="slide__heading reveal">La clase sana pesa el doble que un tizón, no 6,6 veces</h2>
+    <div class="diagram-shell reveal">
+      <svg class="ve-svg" viewBox="0 0 640 205" role="img" aria-label="Pesos de clase aplicados: 0,72 para cada tizón y 2,25 para la clase sana; el valor equilibrado era 4,74.">
+        <text class="fig-t sm dim" x="20" y="30">Peso en la función de pérdida</text>
+        <text class="fig-t sm" x="192" y="68" text-anchor="end">Temprano</text>
+        <text class="fig-t sm" x="192" y="113" text-anchor="end">Tardío</text>
+        <text class="fig-t sm" x="192" y="158" text-anchor="end">Sana</text>
+
+        <rect x="200" y="52" width="52" height="16" fill="var(--text-dim)" opacity=".45"/>
+        <text class="fig-t sm n" x="260" y="66">0,72</text>
+        <rect x="200" y="97" width="52" height="16" fill="var(--text-dim)" opacity=".45"/>
+        <text class="fig-t sm n" x="260" y="111">0,72</text>
+        <rect x="200" y="142" width="162" height="16" fill="var(--accent)"/>
+        <text class="fig-t sm n b" x="370" y="156" fill="var(--accent)">2,25 aplicado</text>
+
+        <path class="ve-axis" d="M541 124v54" stroke="var(--risk)" stroke-dasharray="4 3"/>
+        <text class="fig-t xs b" x="541" y="116" text-anchor="middle" fill="var(--risk)">equilibrado 4,74</text>
+
+        <path class="ve-axis" d="M200 178H560"/>
+        <text class="fig-t xs dim" x="200" y="196" text-anchor="middle">0</text>
+        <text class="fig-t xs dim" x="272" y="196" text-anchor="middle">1</text>
+        <text class="fig-t xs dim" x="344" y="196" text-anchor="middle">2</text>
+        <text class="fig-t xs dim" x="416" y="196" text-anchor="middle">3</text>
+        <text class="fig-t xs dim" x="488" y="196" text-anchor="middle">4</text>
+        <text class="fig-t xs dim" x="560" y="196" text-anchor="middle">5</text>
+      </svg>
+    </div>
+    <p class="slide__note reveal"><code>compute_class_weight</code> pedía 4,74 para igualar la proporción 6,6 : 1, pero antes de entrenar el notebook lo fija a mano en 2,25.</p>
+  </section>
+
+  <!-- 10. FIG 5 AUGMENTATION -->
+  <section class="slide">
+    <p class="slide__label reveal">Fig. 5 · Augmentation en entrenamiento</p>
+    <h2 class="slide__heading reveal">Ocho transformaciones por lote; dos atacan la nitidez</h2>
+    <div class="pipe reveal">
+      <div class="step"><span class="idx">01</span><span>Flip H + V</span></div>
+      <div class="step"><span class="idx">02</span><span>Rotación ±10 %</span></div>
+      <div class="step"><span class="idx">03</span><span>Zoom ±10 %</span></div>
+      <div class="step"><span class="idx">04</span><span>Contraste 0,1</span></div>
+      <div class="step"><span class="idx">05</span><span>Brillo 0,1</span></div>
+      <div class="step custom"><span class="idx">06 · propia</span><span>Blur gaussiano</span><span class="tag">k 5 · σ 1–2,5 · p 0,3</span></div>
+      <div class="step custom"><span class="idx">07 · propia</span><span>Ruido gaussiano</span><span class="tag">σ 0,05 · p 0,3</span></div>
+      <div class="step"><span class="idx">08</span><span>Rescale 1/255</span><span class="tag">sobre 0–255</span></div>
+    </div>
+    <p class="slide__note reveal">Entra un lote de 32 × 256 × 256 × 3 y sale normalizado a 0–1. La resolución 256² se conserva hasta el primer pooling (128²).</p>
+  </section>
+
+  <!-- 11. DIVIDER 03: MODELADO -->
+  <section class="slide slide--divider">
+    <span class="slide__number" aria-hidden="true">03</span>
+    <p class="slide__label reveal">03 · Modelado</p>
+    <h2 class="slide__heading reveal">Cinco bloques dobles reducen 256² a un vector de 256</h2>
+    <p class="slide__body reveal">Red construida desde cero, sin pesos preentrenados. Cada bloque aplica dos veces Conv + GroupNormalization(8) + ReLU y termina con MaxPooling 2.</p>
+  </section>
+
+  <!-- 12. FIG 6 ARQUITECTURA -->
+  <section class="slide">
+    <p class="slide__label reveal">Fig. 6 · Arquitectura de la CNN (2,39 M parámetros)</p>
+    <h2 class="slide__heading reveal">Cinco poolings llevan 256² a 8² antes del GAP</h2>
+    <div class="diagram-shell reveal">
+      <svg class="ve-svg" viewBox="0 0 1000 390" role="img" aria-label="Arquitectura: entrada 256 por 256 por 3, ocho capas de preparación, cinco bloques dobles de 32, 64, 128, 256 y 256 filtros, y una cabeza con GAP, densa de 128, dropout y softmax de 3.">
+        <rect x="16" y="98" width="100" height="206" rx="6" fill="var(--bg)" stroke="var(--border-bright)" stroke-width="1.5"/>
+        <text class="fig-t b" x="66" y="192" text-anchor="middle">Entrada</text>
+        <text class="fig-t xs dim" x="66" y="214" text-anchor="middle">256 × 256 × 3</text>
+        <text class="fig-t xs dim" x="66" y="234" text-anchor="middle">lote de 32</text>
+
+        <path class="ve-axis" d="M120 201H142"/><path d="M136 197l8 4-8 4z" fill="var(--text-dim)"/>
+
+        <rect x="146" y="90" width="124" height="222" rx="6" fill="var(--accent-dim)" stroke="var(--accent)" stroke-width="1.5"/>
+        <text class="fig-t b" x="208" y="122" text-anchor="middle">Preparación</text>
+        <text class="fig-t xs dim" x="208" y="146" text-anchor="middle">8 capas · train</text>
+        <text class="fig-t xs" x="208" y="170" text-anchor="middle">flip · rotación</text>
+        <text class="fig-t xs" x="208" y="191" text-anchor="middle">zoom · contraste</text>
+        <text class="fig-t xs" x="208" y="212" text-anchor="middle">brillo · blur 30 %</text>
+        <text class="fig-t xs" x="208" y="233" text-anchor="middle">ruido 30 %</text>
+        <text class="fig-t xs" x="208" y="254" text-anchor="middle">rescale 1/255</text>
+        <text class="fig-t xs dim" x="208" y="286" text-anchor="middle">256² hasta el pool</text>
+
+        <path class="ve-axis" d="M274 201H296"/><path d="M290 197l8 4-8 4z" fill="var(--text-dim)"/>
+
+        <rect x="300" y="98" width="86" height="206" rx="6" fill="var(--surface)" stroke="var(--border-bright)" stroke-width="1.5"/>
+        <text class="fig-t b n" x="343" y="196" text-anchor="middle" font-size="22">32</text>
+        <text class="fig-t xs dim" x="343" y="216" text-anchor="middle">filtros</text>
+        <text class="fig-t xs" x="343" y="284" text-anchor="middle">GN 8</text>
+
+        <rect x="416" y="114" width="86" height="174" rx="6" fill="var(--surface)" stroke="var(--border-bright)" stroke-width="1.5"/>
+        <text class="fig-t b n" x="459" y="196" text-anchor="middle" font-size="22">64</text>
+        <text class="fig-t xs dim" x="459" y="216" text-anchor="middle">filtros</text>
+        <text class="fig-t xs" x="459" y="272" text-anchor="middle">GN 8</text>
+
+        <rect x="532" y="128" width="86" height="146" rx="6" fill="var(--surface)" stroke="var(--border-bright)" stroke-width="1.5"/>
+        <text class="fig-t b n" x="575" y="196" text-anchor="middle" font-size="22">128</text>
+        <text class="fig-t xs dim" x="575" y="216" text-anchor="middle">filtros</text>
+        <text class="fig-t xs" x="575" y="258" text-anchor="middle">GN 8</text>
+
+        <rect x="648" y="142" width="86" height="118" rx="6" fill="var(--surface)" stroke="var(--border-bright)" stroke-width="1.5"/>
+        <text class="fig-t b n" x="691" y="196" text-anchor="middle" font-size="22">256</text>
+        <text class="fig-t xs dim" x="691" y="216" text-anchor="middle">filtros</text>
+        <text class="fig-t xs" x="691" y="246" text-anchor="middle">GN 8</text>
+
+        <rect x="764" y="154" width="86" height="94" rx="6" fill="var(--surface)" stroke="var(--border-bright)" stroke-width="1.5"/>
+        <text class="fig-t b n" x="807" y="196" text-anchor="middle" font-size="22">256</text>
+        <text class="fig-t xs dim" x="807" y="216" text-anchor="middle">filtros</text>
+        <text class="fig-t xs" x="807" y="236" text-anchor="middle">GN 8</text>
+
+        <text class="fig-t xs dim" x="343" y="86" text-anchor="middle">256²</text>
+        <text class="fig-t xs dim" x="459" y="102" text-anchor="middle">128²</text>
+        <text class="fig-t xs dim" x="575" y="116" text-anchor="middle">64²</text>
+        <text class="fig-t xs dim" x="691" y="130" text-anchor="middle">32²</text>
+        <text class="fig-t xs dim" x="807" y="142" text-anchor="middle">16²</text>
+
+        <text class="fig-t xs n dim" x="343" y="326" text-anchor="middle">11,7 k</text>
+        <text class="fig-t xs n dim" x="459" y="326" text-anchor="middle">55,6 k</text>
+        <text class="fig-t xs n dim" x="575" y="326" text-anchor="middle">221,7 k</text>
+        <text class="fig-t xs n dim" x="691" y="326" text-anchor="middle">885,8 k</text>
+        <text class="fig-t xs n dim" x="807" y="326" text-anchor="middle">1 180,7 k</text>
+        <text class="fig-t xs dim" x="343" y="344" text-anchor="middle">k 5² + 3²</text>
+        <text class="fig-t xs dim" x="459" y="344" text-anchor="middle">k 3²</text>
+        <text class="fig-t xs dim" x="575" y="344" text-anchor="middle">k 3²</text>
+        <text class="fig-t xs dim" x="691" y="344" text-anchor="middle">k 3²</text>
+        <text class="fig-t xs dim" x="807" y="344" text-anchor="middle">k 3²</text>
+
+        <path class="ve-axis" d="M386 201H412M502 201H528M618 201H644M734 201H760M850 201H872"/>
+        <path d="M406 197l8 4-8 4zM522 197l8 4-8 4zM638 197l8 4-8 4zM754 197l8 4-8 4zM866 197l8 4-8 4z" fill="var(--text-dim)"/>
+
+        <rect x="874" y="182" width="110" height="38" rx="4" fill="var(--surface)" stroke="var(--border-bright)" stroke-width="1.5"/>
+        <text class="fig-t sm" x="929" y="206" text-anchor="middle">GAP → 256</text>
+        <rect x="874" y="228" width="110" height="38" rx="4" fill="var(--surface)" stroke="var(--border-bright)" stroke-width="1.5"/>
+        <text class="fig-t sm" x="929" y="252" text-anchor="middle">Dense 128</text>
+        <rect x="874" y="274" width="110" height="32" rx="4" fill="var(--surface)" stroke="var(--border)" stroke-width="1.5"/>
+        <text class="fig-t xs dim" x="929" y="294" text-anchor="middle">Dropout 0,4</text>
+        <rect x="874" y="314" width="110" height="38" rx="4" fill="var(--accent-dim)" stroke="var(--accent)" stroke-width="1.5"/>
+        <text class="fig-t sm b" x="929" y="338" text-anchor="middle">Softmax 3</text>
+        <path class="ve-axis" d="M929 220v8M929 266v8M929 306v8"/>
+        <text class="fig-t xs b" x="929" y="374" text-anchor="middle" fill="var(--accent)">2,39 M total</text>
+        <text class="fig-t xs dim" x="542" y="374" text-anchor="middle">cada bloque: conv → GN(8) → ReLU, dos veces, y max pooling 2</text>
+      </svg>
+    </div>
+  </section>
+
+  <!-- 13. TABLE: DECISIONES DE ARQUITECTURA -->
+  <section class="slide">
+    <p class="slide__label reveal">03 · Modelado · Decisiones</p>
+    <h2 class="slide__heading reveal">Cuatro decisiones explican el tamaño y la estabilidad</h2>
+    <div class="table-scroll reveal">
+      <table>
+        <thead><tr><th>Decisión</th><th>Alternativa evitada</th><th>Por qué</th></tr></thead>
+        <tbody>
+          <tr><td><code>GroupNormalization(8)</code></td><td>BatchNormalization</td><td>Con lotes de 32 y 1 506 imágenes, las estadísticas por lote son ruidosas; GN normaliza cada imagen por separado.</td></tr>
+          <tr><td>Convoluciones sin sesgo</td><td><code>use_bias=True</code></td><td>La normalización que sigue absorbe la constante: el sesgo sería un parámetro muerto.</td></tr>
+          <tr><td><code>GlobalAveragePooling</code></td><td><code>Flatten</code></td><td>256 valores en lugar de 8 × 8 × 256 = 16 384. Es la mayor poda de parámetros del modelo.</td></tr>
+          <tr><td><code>Dropout(0,4)</code> tras ReLU</td><td>Dropout antes de activar</td><td>Apaga activaciones ya calculadas; el comentario del notebook lo deja explícito.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- 14. TABLE: HIPERPARÁMETROS -->
+  <section class="slide">
+    <p class="slide__label reveal">03 · Modelado · Configuración</p>
+    <h2 class="slide__heading reveal">Parámetros de entrenamiento y callbacks</h2>
+    <div class="table-scroll reveal">
+      <table>
+        <thead><tr><th>Parámetro</th><th>Valor</th></tr></thead>
+        <tbody>
+          <tr><td>Optimizador</td><td class="num">Adam · lr 5 × 10⁻⁴</td></tr>
+          <tr><td>Pérdida</td><td><code>sparse_categorical_crossentropy</code></td></tr>
+          <tr><td>Lote</td><td class="num">32 · 48 pasos por época</td></tr>
+          <tr><td>Épocas</td><td class="num">80 máximas · 64 reales</td></tr>
+          <tr><td>Pesos de clase</td><td class="num">0,72 · 0,72 · 2,25</td></tr>
+          <tr><td>Parada</td><td class="num">val_loss · paciencia 12 · restaura la mejor</td></tr>
+          <tr><td>Tasa de aprendizaje</td><td class="num">×0,5 tras 4 épocas sin mejora · mínimo 10⁻⁶</td></tr>
+          <tr><td>Coste</td><td class="num">≈ 24 s por época</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- 15. DIVIDER 04: ENTRENAMIENTO -->
+  <section class="slide slide--divider">
+    <span class="slide__number" aria-hidden="true">04</span>
+    <p class="slide__label reveal">04 · Entrenamiento</p>
+    <h2 class="slide__heading reveal">La accuracy llega a 90 % en doce épocas y después se pule</h2>
+    <p class="slide__body reveal">El historial tiene tres tramos: silueta de la hoja, tejido del síntoma y ajuste fino hasta el corte de EarlyStopping en la época 64.</p>
+  </section>
+
+  <!-- 16. FIG 7 CURVAS -->
+  <section class="slide">
+    <p class="slide__label reveal">Fig. 7 · Curvas de entrenamiento (64 épocas)</p>
+    <h2 class="slide__heading reveal">La pérdida de validación toca su mínimo en la época 52</h2>
+    <div class="diagram-shell reveal">
+      <svg class="ve-svg" viewBox="0 0 880 515" role="img" aria-label="Curvas de entrenamiento: accuracy de 42 a 99 por ciento en 64 épocas, pérdida de validación con mínimo 0,0368 en la época 52 y siete recortes de tasa de aprendizaje.">
+        <text class="fig-t sm b" x="64" y="20">Acierto</text>
+        <path d="M250 15h24" stroke="var(--accent)" stroke-width="3"/>
+        <text class="fig-t xs" x="282" y="20">validación</text>
+        <path d="M376 15h24" stroke="var(--text-dim)" stroke-width="2"/>
+        <text class="fig-t xs" x="408" y="20">entrenamiento</text>
+        <text class="fig-t xs dim" x="56" y="34" text-anchor="end">100 %</text>
+        <text class="fig-t xs dim" x="56" y="101" text-anchor="end">80 %</text>
+        <text class="fig-t xs dim" x="56" y="167" text-anchor="end">60 %</text>
+        <text class="fig-t xs dim" x="56" y="234" text-anchor="end">40 %</text>
+        <path class="ve-axis" d="M64 230H760"/>
+
+        <polyline fill="none" stroke="var(--text-dim)" stroke-width="1.5" points="64,221.9 75,208 86.1,120.7 97.1,117 108.2,114.6 119.2,85.1 130.3,96.4 141.3,71.8 152.4,95.3 163.4,79.6 174.5,64.7 185.5,60.5 196.6,58.1 207.6,61.9 218.7,56.1 229.7,58.1 240.8,62.3 251.8,49 262.9,50.1 273.9,46.4 285,46.8 296,47 307,44.2 318.1,43.7 329.1,42.4 340.2,41.1 351.2,41.3 362.3,41.1 373.3,38.4 384.4,46.6 395.4,39.7 406.5,41.3 417.5,38.6 428.6,38.9 439.6,37.3 450.7,37.3 461.7,36 472.8,36.4 483.8,36.4 494.9,36.4 505.9,34.9 517,34.4 528,35.8 539,34.9 550.1,36.4 561.1,34.2 572.2,33.8 583.2,33.1 594.3,33.1 605.3,33.8 616.4,33.3 627.4,34.2 638.5,34.4 649.5,33.3 660.6,35.1 671.6,33.8 682.7,33.1 693.7,34.2 704.8,32.9 715.8,33.1 726.9,32.4 737.9,32.9 749,32.2 760,33.5"/>
+        <polyline fill="none" stroke="var(--accent)" stroke-width="2.6" points="64,208.1 75,149 86.1,75.5 97.1,74.5 108.2,74.5 119.2,69.3 130.3,73.5 141.3,101.4 152.4,73.5 163.4,65.2 174.5,75.5 185.5,47.6 196.6,49.7 207.6,58 218.7,47.6 229.7,117 240.8,47.6 251.8,44.5 262.9,47.6 273.9,42.4 285,47.6 296,45.5 307,41.4 318.1,43.5 329.1,41.4 340.2,38.3 351.2,40.4 362.3,40.4 373.3,48.6 384.4,41.4 395.4,40.4 406.5,41.4 417.5,39.3 428.6,40.4 439.6,39.3 450.7,38.3 461.7,37.2 472.8,39.3 483.8,38.3 494.9,39.3 505.9,38.3 517,39.3 528,38.3 539,39.3 550.1,38.3 561.1,38.3 572.2,37.2 583.2,37.2 594.3,36.2 605.3,36.2 616.4,36.2 627.4,37.2 638.5,36.2 649.5,37.2 660.6,38.3 671.6,37.2 682.7,37.2 693.7,36.2 704.8,35.2 715.8,36.2 726.9,36.2 737.9,36.2 749,36.2 760,36.2"/>
+
+        <text class="fig-t sm b" x="64" y="258">Pérdida · escala logarítmica</text>
+        <text class="fig-t xs dim" x="56" y="290" text-anchor="end">1,0</text>
+        <text class="fig-t xs dim" x="56" y="331" text-anchor="end">0,3</text>
+        <text class="fig-t xs dim" x="56" y="369" text-anchor="end">0,1</text>
+        <text class="fig-t xs dim" x="56" y="410" text-anchor="end">0,03</text>
+        <path class="ve-axis" d="M64 420H760"/>
+        <path class="ve-axis" d="M64 406.1H760" stroke="var(--risk)" stroke-dasharray="5 4"/>
+        <text class="fig-t xs b" x="768" y="410" fill="var(--risk)">meta 0,03</text>
+
+        <polyline fill="none" stroke="var(--text-dim)" stroke-width="1.4" stroke-dasharray="3 3" points="64,288.1 75,290.8 86.1,303.3 97.1,304.3 108.2,311.9 119.2,320.8 130.3,316.2 141.3,329.6 152.4,317.1 163.4,326.7 174.5,340.9 185.5,343.7 196.6,344.3 207.6,337 218.7,342 229.7,340.4 240.8,337.3 251.8,354.5 262.9,351.7 273.9,359 285,362.2 296,357.3 307,362.7 318.1,365 329.1,367 340.2,371.5 351.2,372.4 362.3,372.2 373.3,379.3 384.4,359.2 395.4,378.3 406.5,375.2 417.5,385.6 428.6,381.4 439.6,387.7 450.7,387.7 461.7,391.4 472.8,394.1 483.8,395.1 494.9,398.1 505.9,400.7 517,395.4 528,394.3 539,397.1 550.1,392.7 561.1,402.5 572.2,405.6 583.2,410.4 594.3,416.7 605.3,397 616.4,408.5 627.4,404.7 638.5,405.1 649.5,397.1 660.6,396.9 671.6,405.1 682.7,412.2 693.7,403.5 704.8,410 715.8,412.8 726.9,414.5 737.9,415.8 749,416.4 760,414.1"/>
+        <polyline fill="none" stroke="var(--accent)" stroke-width="2.4" points="64,286.4 75,290.4 86.1,318.5 97.1,318.4 108.2,315 119.2,328.1 130.3,316.8 141.3,307.9 152.4,325.6 163.4,333.6 174.5,329.1 185.5,355.1 196.6,347.6 207.6,336 218.7,349.2 229.7,287.9 240.8,352.1 251.8,358.8 262.9,353 273.9,357.5 285,359.6 296,365.2 307,366.1 318.1,360.3 329.1,362.2 340.2,376.8 351.2,370.8 362.3,366.1 373.3,355.6 384.4,367.7 395.4,372.6 406.5,373 417.5,374.7 428.6,371.8 439.6,368.2 450.7,376.2 461.7,385.1 472.8,377.3 483.8,387 494.9,375.1 505.9,386.4 517,381.9 528,378.3 539,379.1 550.1,389.6 561.1,393.8 572.2,395.4 583.2,393.4 594.3,394.3 605.3,393.7 616.4,394.2 627.4,399.1 638.5,397.8 649.5,387.9 660.6,393.9 671.6,393.8 682.7,392.8 693.7,398.6 704.8,397.6 715.8,397.5 726.9,398.2 737.9,397.5 749,397.8 760,397.8"/>
+
+        <text class="fig-t xs dim" x="64" y="446">lr · 7 recortes ×0,5</text>
+        <text class="fig-t xs dim" x="56" y="466" text-anchor="end">5e-4</text>
+        <path class="ve-axis" d="M64 486H760"/>
+        <path fill="none" stroke="var(--text-dim)" stroke-width="1.6" d="M64 458H240.8V461.3H384.4V464.7H428.6V468H528V471.4H616.4V474.7H715.8V478H760V484.7"/>
+
+        <path class="ve-axis" d="M627.4 30V486" stroke="var(--accent)" stroke-dasharray="3 4"/>
+        <path class="ve-axis" d="M760 30V486" stroke="var(--border-bright)" stroke-dasharray="2 4"/>
+        <text class="fig-t xs b" x="627.4" y="24" text-anchor="middle" fill="var(--accent)">52</text>
+        <text class="fig-t xs dim" x="760" y="24" text-anchor="middle">64</text>
+        <text class="fig-t xs dim" x="64" y="508" text-anchor="middle">1</text>
+        <text class="fig-t xs dim" x="229.7" y="508" text-anchor="middle">16</text>
+        <text class="fig-t xs dim" x="406.5" y="508" text-anchor="middle">32</text>
+        <text class="fig-t xs dim" x="583.2" y="508" text-anchor="middle">48</text>
+        <text class="fig-t xs dim" x="760" y="508" text-anchor="middle">64</text>
+      </svg>
+    </div>
+  </section>
+
+  <!-- 17. CONTENT: TRES TRAMOS + PARADA -->
+  <section class="slide">
+    <p class="slide__label reveal">04 · Entrenamiento · Lectura de la curva</p>
+    <h2 class="slide__heading reveal">EarlyStopping corta en la época 64 y restaura la 52</h2>
+    <ul class="slide__list reveal">
+      <li><b>Tramo 1 (épocas 1–12):</b> validación salta de 46,6 % a 94,7 %; aprende silueta de hoja y contorno de lesión.</li>
+      <li><b>Tramo 2 (épocas 13–40):</b> tasa de aprendizaje baja cinco veces; <code>val_loss</code> cae de 0,17 a 0,07 al mirar el tejido.</li>
+      <li><b>Tramo 3 (épocas 41–64):</b> entrenamiento llega a 99,5 % y validación a 98,1 % (brecha de 1,4 puntos).</li>
+    </ul>
+    <div class="callout reveal">
+      <span class="chip warn">Detalle de la parada</span>
+      <p>La época 59 alcanza 98,45 % de accuracy en validación, pero su <code>val_loss</code> (0,0385) es peor que el de la 52 (0,0368). Punto atípico: época 16 (<code>val_loss</code> 0,954 y 73,9 % accuracy) en el primer recorte de LR.</p>
+    </div>
+  </section>
+
+  <!-- 18. DIVIDER 05: RESULTADOS -->
+  <section class="slide slide--divider">
+    <span class="slide__number" aria-hidden="true">05</span>
+    <p class="slide__label reveal">05 · Resultados</p>
+    <h2 class="slide__heading reveal">La diagonal suma 317 de 324 en prueba</h2>
+    <p class="slide__body reveal">97,84 % de accuracy, 7 fallos y 0,0506 de pérdida. Cumple el objetivo de error ≤ 3 % (2,16 %), pero queda a dos imágenes del 98,5 %.</p>
+  </section>
+
+  <!-- 19. TABLE: MÉTRICAS POR CLASE -->
+  <section class="slide">
+    <p class="slide__label reveal">05 · Resultados · Reporte de clasificación</p>
+    <h2 class="slide__heading reveal">Los tizones superan 97 % de F1; hoja sana queda en 89,8 %</h2>
+    <div class="table-scroll reveal">
+      <table>
+        <thead><tr><th>Clase</th><th class="num">Soporte</th><th class="num">Precisión</th><th class="num">Recall</th><th class="num">F1</th></tr></thead>
+        <tbody>
+          <tr><td>Tizón temprano</td><td class="num">150</td><td class="num">0,9933</td><td class="num">0,9933</td><td class="num">0,9933</td></tr>
+          <tr><td>Tizón tardío</td><td class="num">150</td><td class="num">0,9799</td><td class="num">0,9733</td><td class="num">0,9766</td></tr>
+          <tr><td>Hoja sana</td><td class="num">24</td><td class="num">0,8800</td><td class="num">0,9167</td><td class="num">0,8980</td></tr>
+          <tr><td>Macro avg</td><td class="num">324</td><td class="num">0,9511</td><td class="num">0,9611</td><td class="num">0,9560</td></tr>
+          <tr><td>Weighted avg</td><td class="num">324</td><td class="num">0,9787</td><td class="num">0,9784</td><td class="num">0,9785</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="slide__note reveal">296 de 300 aciertos entre los dos tizones. Precisión 0,88 en hoja sana significa que, de cada 25 hojas llamadas sanas, 3 estaban enfermas.</p>
+  </section>
+
+  <!-- 20. CASES: 7 ERRORES -->
+  <section class="slide">
+    <p class="slide__label reveal">05 · Resultados · Coste práctico</p>
+    <h2 class="slide__heading reveal">Los 7 errores agrupados por su consecuencia en campo</h2>
+    <div class="cases reveal">
+      <div class="case">
+        <span class="chip risk">3 casos</span>
+        <h3>Tardío → sano</h3>
+        <svg class="ve-mini" viewBox="0 0 240 112" role="img" aria-label="Un tizón tardío clasificado como hoja sana.">
+          <rect x="14" y="28" width="84" height="36" rx="4" fill="var(--bg)" stroke="var(--risk)" stroke-width="1.5"/>
+          <text class="fig-t xs" x="56" y="51" text-anchor="middle">Tardío</text>
+          <path d="M100 46H140" stroke="var(--risk)" stroke-width="2" stroke-dasharray="4 3"/>
+          <path d="M134 42l8 4-8 4z" fill="var(--risk)"/>
+          <rect x="142" y="28" width="84" height="36" rx="4" fill="var(--bg)" stroke="var(--border-bright)"/>
+          <text class="fig-t xs" x="184" y="51" text-anchor="middle">Sana</text>
+          <text class="fig-t xs b" x="120" y="92" text-anchor="middle" fill="var(--risk)">no se trata</text>
+        </svg>
+        <p class="slide__note">El error más caro: la lesión sigue en campo.</p>
+      </div>
+      <div class="case">
+        <span class="chip warn">2 casos</span>
+        <h3>Sano → tardío</h3>
+        <svg class="ve-mini" viewBox="0 0 240 112" role="img" aria-label="Una hoja sana clasificada como tizón tardío.">
+          <rect x="14" y="28" width="84" height="36" rx="4" fill="var(--bg)" stroke="var(--border-bright)"/>
+          <text class="fig-t xs" x="56" y="51" text-anchor="middle">Sana</text>
+          <path d="M100 46H140" stroke="var(--warn)" stroke-width="2" stroke-dasharray="4 3"/>
+          <path d="M134 42l8 4-8 4z" fill="var(--warn)"/>
+          <rect x="142" y="28" width="84" height="36" rx="4" fill="var(--bg)" stroke="var(--warn)" stroke-width="1.5"/>
+          <text class="fig-t xs" x="184" y="51" text-anchor="middle">Tardío</text>
+          <text class="fig-t xs b" x="120" y="92" text-anchor="middle" fill="var(--warn)">tratamiento de más</text>
+        </svg>
+        <p class="slide__note">Cuesta fungicida, no cosecha.</p>
+      </div>
+      <div class="case">
+        <span class="chip ok">2 casos</span>
+        <h3>Temprano ↔ tardío</h3>
+        <svg class="ve-mini" viewBox="0 0 240 112" role="img" aria-label="Un tizón temprano y uno tardío confundidos entre sí.">
+          <rect x="14" y="28" width="84" height="36" rx="4" fill="var(--bg)" stroke="var(--border-bright)"/>
+          <text class="fig-t xs" x="56" y="51" text-anchor="middle">Temprano</text>
+          <path d="M100 46H140M140 46H100" stroke="var(--border-bright)" stroke-width="2"/>
+          <path d="M134 42l8 4-8 4zM106 42l-8 4 8 4z" fill="var(--border-bright)"/>
+          <rect x="142" y="28" width="84" height="36" rx="4" fill="var(--bg)" stroke="var(--border-bright)"/>
+          <text class="fig-t xs" x="184" y="51" text-anchor="middle">Tardío</text>
+          <text class="fig-t xs dim" x="120" y="92" text-anchor="middle">mismo manejo</text>
+        </svg>
+        <p class="slide__note">Cambia el nombre, no la decisión.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 21. SPLIT: FIG 8 + METAS -->
+  <section class="slide">
+    <p class="slide__label reveal">Fig. 8 · Brecha entre particiones y metas</p>
+    <h2 class="slide__heading reveal">Validación y prueba coinciden en 0,01 puntos</h2>
+    <div class="slide__split reveal">
+      <div class="diagram-shell">
+        <svg class="ve-svg" viewBox="0 0 540 225" role="img" aria-label="Accuracy por partición: entrenamiento 99,54 por ciento, validación 97,83, prueba 97,84; la meta era 98,5.">
+          <text class="fig-t sm dim" x="16" y="26">Accuracy por partición</text>
+          <text class="fig-t sm" x="92" y="66" text-anchor="end">Entrena</text>
+          <text class="fig-t sm" x="92" y="110" text-anchor="end">Valida</text>
+          <text class="fig-t sm" x="92" y="154" text-anchor="end">Prueba</text>
+
+          <path class="ve-axis" d="M108 58H410" stroke="var(--border)"/>
+          <circle cx="418" cy="61" r="7" fill="var(--text-dim)"/>
+          <text class="fig-t sm n" x="432" y="66">99,54 %</text>
+
+          <path class="ve-axis" d="M108 102H196" stroke="var(--border)"/>
+          <circle cx="205" cy="105" r="7" fill="var(--accent)" opacity=".5"/>
+          <text class="fig-t sm n" x="219" y="110">97,83 %</text>
+
+          <path class="ve-axis" d="M108 146H197" stroke="var(--border)"/>
+          <circle cx="206" cy="149" r="7" fill="var(--accent)"/>
+          <text class="fig-t sm n b" x="220" y="154">97,84 %</text>
+
+          <path class="ve-axis" d="M290 36V172" stroke="var(--risk)" stroke-dasharray="4 3"/>
+          <path class="ve-axis" d="M108 180H476"/>
+          <text class="fig-t xs dim" x="108" y="198" text-anchor="middle">97 %</text>
+          <text class="fig-t xs dim" x="231" y="198" text-anchor="middle">98 %</text>
+          <text class="fig-t xs dim" x="353" y="198" text-anchor="middle">99 %</text>
+          <text class="fig-t xs dim" x="476" y="198" text-anchor="middle">100 %</text>
+          <text class="fig-t xs b" x="290" y="218" text-anchor="middle" fill="var(--risk)">meta 98,5 %</text>
+        </svg>
+      </div>
+      <div>
+        <div class="table-scroll">
+          <table>
+            <thead><tr><th>Meta</th><th class="num">Resultado</th><th>Estado</th></tr></thead>
+            <tbody>
+              <tr><td>Accuracy &gt; 0,985</td><td class="num">0,9784</td><td><span class="chip risk">no alcanzada</span></td></tr>
+              <tr><td>Error ≤ 0,03</td><td class="num">0,0216</td><td><span class="chip ok">alcanzada</span></td></tr>
+              <tr><td>Pérdida ≤ 0,03</td><td class="num">0,0506</td><td><span class="chip risk">no alcanzada</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="slide__note" style="margin-top:12px;">Con 324 imágenes, cada acierto mueve la accuracy 0,31 pts. En clase sana (24 imgs), cada error mueve su recall 4,17 pts.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 22. FIG 9 CASO INDIVIDUAL -->
+  <section class="slide">
+    <p class="slide__label reveal">Fig. 9 · Predicción de una muestra</p>
+    <h2 class="slide__heading reveal">El caso suelto duda entre sano y tardío, nunca con temprano</h2>
+    <div class="diagram-shell reveal">
+      <svg class="ve-svg" viewBox="0 0 640 190" role="img" aria-label="Predicción de una hoja sana real: 0,0007 por ciento tizón temprano, 76,7 por ciento tardío y 23,3 por ciento sana.">
+        <text class="fig-t sm dim" x="20" y="26">Una hoja sana real, tomada al azar del conjunto de prueba</text>
+        <text class="fig-t sm" x="192" y="74" text-anchor="end">Temprano</text>
+        <text class="fig-t sm" x="192" y="114" text-anchor="end">Tardío</text>
+        <text class="fig-t sm" x="192" y="154" text-anchor="end">Sana</text>
+        <rect x="200" y="60" width="3" height="16" fill="var(--text-dim)"/>
+        <text class="fig-t sm n" x="212" y="72">0,0007 %</text>
+        <rect x="200" y="100" width="230" height="16" fill="var(--risk)"/>
+        <text class="fig-t sm n b" x="438" y="112" fill="var(--risk)">76,7 %</text>
+        <rect x="200" y="140" width="70" height="16" fill="var(--text-dim)" opacity=".5"/>
+        <text class="fig-t sm n" x="278" y="152">23,3 %</text>
+        <path class="ve-axis" d="M200 168H500"/>
+        <text class="fig-t xs dim" x="200" y="184" text-anchor="middle">0</text>
+        <text class="fig-t xs dim" x="500" y="184" text-anchor="middle">100 %</text>
+      </svg>
+    </div>
+    <p class="slide__note reveal">La probabilidad de tizón temprano es casi cero: el modelo reconoce la ausencia de esa lesión y concentra su duda entre sano y tardío.</p>
+  </section>
+
+  <!-- 23. DIVIDER 06: LÍMITES -->
+  <section class="slide slide--divider">
+    <span class="slide__number" aria-hidden="true">06</span>
+    <p class="slide__label reveal">06 · Límites</p>
+    <h2 class="slide__heading reveal">Para pasar de 97,8 % a 98,5 % falta clase sana, no arquitectura</h2>
+    <p class="slide__body reveal">El intervalo de confianza del 95 % para 97,84 % (n = 324) va de 95,6 % a 99,0 %. La meta de 98,5 % cae dentro del intervalo.</p>
+  </section>
+
+  <!-- 24. ACCIONES + VEREDICTO + FUENTES -->
+  <section class="slide">
+    <p class="slide__label reveal">06 · Límites · Siguientes pasos y veredicto</p>
+    <h2 class="slide__heading reveal">Separar tizones está resuelto; certificar hoja sana exige umbral</h2>
+    <div class="table-scroll reveal">
+      <table>
+        <thead><tr><th>Acción</th><th>Efecto esperado</th><th>Coste</th></tr></thead>
+        <tbody>
+          <tr><td>Más imágenes sanas</td><td>Con 500 en total, el intervalo de la clase se estrecha a la mitad</td><td><span class="chip warn">recolectar</span></td></tr>
+          <tr><td>Transfer learning</td><td>Con 2 152 imágenes rinde más que una CNN desde cero (siguiente entrega)</td><td><span class="chip warn">medio</span></td></tr>
+          <tr><td>Umbral de clase sana</td><td>Los 3 falsos negativos se vuelven alertas; suben los falsos positivos</td><td><span class="chip ok">bajo</span></td></tr>
+          <tr><td>Reporte completo</td><td>Falta el AUC numérico, el IC y la matriz de validación en tabla</td><td><span class="chip ok">bajo</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="callout reveal">
+      <span class="chip warn">Veredicto</span>
+      <p>Sirve para <b>separar los dos tizones</b> y <b>priorizar revisiones</b>. Todavía no certifica que una hoja está sana: 3 de cada 300 enfermas pasan como sanas sin umbral.</p>
+    </div>
+    <p class="sources-line reveal">Fuentes: <code>notebooks/Potato_Disease_Detection_FINAL.ipynb</code> (celdas 14–51) · Kaggle <code>hafiznouman786/potato-plant-diseases-data</code> (PlantVillage, CC0-1.0) · Parámetros (2,39 M) e IC 95 % calculados sobre las capas y 324 imágenes.</p>
+  </section>
+
+</div>
+
+<script>
+  // ===== DELIVERY CHECK (copy as is) =====
+  function autoFit() {
+    document.querySelectorAll('.slide__kpi-val').forEach(function(el) {
+      if (el.scrollWidth > el.clientWidth) {
+        el.style.transform = 'scale(' + el.clientWidth / el.scrollWidth + ')'; el.style.transformOrigin = 'left top';
+        el.closest('.slide').setAttribute('data-auto-fit', 'KPI value');
+      }
+    });
+    document.querySelectorAll('.slide--quote blockquote').forEach(function(el) {
+      var len = el.textContent.trim().length;
+      if (len > 150) {
+        el.style.fontSize = Math.max(16, Math.round(parseFloat(getComputedStyle(el).fontSize) * Math.max(.5, 150 / len))) + 'px';
+        el.closest('.slide').setAttribute('data-auto-fit', 'quote');
+      }
+    });
+  }
+  function checkSlideOverflow() {
+    var failures = [];
+    document.querySelectorAll('.slide').forEach(function(slide, i) {
+      var excess = Math.ceil(slide.scrollHeight - slide.clientHeight), fit = slide.getAttribute('data-auto-fit');
+      if (excess > 1 || fit) {
+        slide.setAttribute('data-slide-check', excess > 1 ? 'overflow' : 'auto-fit');
+        slide.setAttribute('data-slide-check-label', excess > 1 ? 'OVERFLOW — split or reduce (' + excess + 'px)' : 'AUTO-FIT USED — review budget (' + fit + ')');
+        failures.push('Slide ' + (i + 1) + ': ' + (excess > 1 ? 'vertical overflow ' + excess + 'px' : 'autoFit: ' + fit));
+      } else {
+        slide.removeAttribute('data-slide-check'); slide.removeAttribute('data-slide-check-label');
+      }
+    });
+    if (failures.length) console.error('Slide delivery check failed. ' + failures.join(' | ') + '. Split or reduce content; autoFit is only a safety net.');
+    else console.info('Slide delivery check passed: no vertical overflow or autoFit fallback.');
+    return failures;
+  }
+  function finishSlideRender() {
+    autoFit();
+    if (!matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    (document.fonts ? document.fonts.ready : Promise.resolve()).then(function() { requestAnimationFrame(checkSlideOverflow); });
+  }
+
+  // ===== ENGINE (copy as is) =====
+  function SlideEngine() {
+    this.deck = document.querySelector('.deck');
+    this.slides = [].slice.call(document.querySelectorAll('.slide'));
+    this.current = 0; this.total = this.slides.length;
+    this.storeKey = ['visual-explainer:slide-deck', location.pathname, document.title, this.total].join(':');
+    this.buildChrome(); this.bindEvents(); this.observe(); this.restore(); this.update();
+  }
+  SlideEngine.prototype.titleOf = function(i) {
+    var el = this.slides[i].querySelector('.slide__hero,.slide__heading,blockquote');
+    var t = el ? el.textContent.trim().replace(/\s+/g, ' ') : 'Slide ' + (i + 1);
+    return t.length > 58 ? t.slice(0, 56) + '…' : t;
+  };
+  SlideEngine.prototype.make = function(tag, cls, text) { var el = document.createElement(tag); if (cls) el.className = cls; if (text) el.textContent = text; return el; };
+  SlideEngine.prototype.buildChrome = function() {
+    var self = this;
+    this.bar = document.body.appendChild(this.make('div', 'deck-progress'));
+    var dots = this.make('nav', 'deck-dots'); dots.setAttribute('aria-label', 'Navegación de diapositivas');
+    this.slides.forEach(function(_, i) {
+      var title = self.titleOf(i), d = self.make('button', 'deck-dot');
+      d.type = 'button'; d.setAttribute('aria-label', 'Ir a diapositiva ' + (i + 1) + ': ' + title);
+      d.appendChild(self.make('span', 'deck-dot-label', title)); d.onclick = function() { self.goTo(i); };
+      dots.appendChild(d);
+    });
+    document.body.appendChild(dots); this.dots = [].slice.call(dots.children);
+    this.counter = document.body.appendChild(this.make('div', 'deck-counter')); this.counter.setAttribute('aria-live', 'polite');
+    this.hints = document.body.appendChild(this.make('div', 'deck-hints', '← → · O índice · ? ayuda'));
+    this.hintTimer = setTimeout(function() { self.hints.classList.add('faded'); }, 4500);
+    this.overlay = this.make('div', 'deck-overlay'); this.overlay.setAttribute('aria-hidden', 'true');
+    this.panel = this.make('div', 'deck-panel'); this.panel.setAttribute('role', 'dialog'); this.panel.setAttribute('aria-modal', 'true'); this.panel.tabIndex = -1;
+    this.overlay.appendChild(this.panel); document.body.appendChild(this.overlay);
+    this.overlay.addEventListener('click', function(e) { if (e.target === self.overlay) self.closeOverlay(); });
+  };
+  SlideEngine.prototype.openOverlay = function(mode) {
+    var self = this, title = mode === 'help' ? 'Atajos' : 'Índice';
+    this.panel.replaceChildren(this.make('div', 'deck-panel__header', title)); this.panel.setAttribute('aria-label', title);
+    if (mode === 'help') {
+      [['siguiente', '→ / ↓ / Espacio'], ['anterior', '← / ↑'], ['primera / última', 'Home / End'], ['índice', 'O'], ['ayuda', '?'], ['cerrar', 'Esc']].forEach(function(r) {
+        var row = self.make('div', 'deck-help-row'); row.append(self.make('span', '', r[0]), self.make('kbd', '', r[1])); self.panel.appendChild(row);
+      });
+    } else {
+      this.slides.forEach(function(_, i) {
+        var b = self.make('button', 'deck-panel__button'); b.type = 'button';
+        if (i === self.current) b.setAttribute('aria-current', 'true');
+        b.append(self.make('span', 'deck-panel__number', String(i + 1)), self.make('span', '', self.titleOf(i)));
+        b.onclick = function() { self.goTo(i); self.closeOverlay(); }; self.panel.appendChild(b);
+      });
+    }
+    this.lastFocus = document.activeElement; this.overlay.classList.add('open'); this.overlay.setAttribute('aria-hidden', 'false'); this.panel.focus(); this.fadeHints();
+  };
+  SlideEngine.prototype.closeOverlay = function() {
+    this.overlay.classList.remove('open'); this.overlay.setAttribute('aria-hidden', 'true');
+    if (this.lastFocus && this.lastFocus.focus) this.lastFocus.focus();
+  };
+  SlideEngine.prototype.bindEvents = function() {
+    var self = this;
+    document.addEventListener('keydown', function(e) {
+      if (e.target.closest('.diagram-shell,.fig-scroll,.table-scroll,.code-scroll,input,textarea,select,[contenteditable]')) return;
+      var open = self.overlay.classList.contains('open');
+      if (e.key === 'Escape' && open) { e.preventDefault(); self.closeOverlay(); return; }
+      if (e.key === 'o' || e.key === 'O' || e.key === '?') { e.preventDefault(); open ? self.closeOverlay() : self.openOverlay(e.key === '?' ? 'help' : 'outline'); return; }
+      if (open) return;
+      if (['ArrowDown', 'ArrowRight', ' ', 'PageDown'].indexOf(e.key) > -1) { e.preventDefault(); self.goTo(self.current + 1); }
+      else if (['ArrowUp', 'ArrowLeft', 'PageUp'].indexOf(e.key) > -1) { e.preventDefault(); self.goTo(self.current - 1); }
+      else if (e.key === 'Home') { e.preventDefault(); self.goTo(0); }
+      else if (e.key === 'End') { e.preventDefault(); self.goTo(self.total - 1); }
+      self.fadeHints();
+    });
+    addEventListener('hashchange', function() { var i = self.fromHash(); if (i !== null && i !== self.current) self.goTo(i); });
+    var y0;
+    this.deck.addEventListener('touchstart', function(e) { y0 = e.touches[0].clientY; }, { passive: true });
+    this.deck.addEventListener('touchend', function(e) { var dy = y0 - e.changedTouches[0].clientY; if (Math.abs(dy) > 50) self.goTo(self.current + (dy > 0 ? 1 : -1)); });
+  };
+  SlideEngine.prototype.fromHash = function() { var m = /^#(?:slide-)?(\d+)$/.exec(location.hash); var i = m ? +m[1] - 1 : -1; return i >= 0 && i < this.total ? i : null; };
+  SlideEngine.prototype.restore = function() {
+    var i = this.fromHash();
+    if (i === null) { try { var j = parseInt(localStorage.getItem(this.storeKey), 10); if (j > 0 && j < this.total) i = j; } catch (e) {} }
+    if (i) { var self = this; this.current = i; setTimeout(function() { self.slides[i].scrollIntoView({ block: 'start', behavior: 'instant' }); }, 60); }
+  };
+  SlideEngine.prototype.observe = function() {
+    var self = this, obs = new IntersectionObserver(function(entries) {
+      entries.forEach(function(en) { if (en.isIntersecting) { en.target.classList.add('visible'); self.current = self.slides.indexOf(en.target); self.update(); } });
+    }, { threshold: .5 });
+    this.slides.forEach(function(s) { obs.observe(s); });
+  };
+  SlideEngine.prototype.goTo = function(i) { this.slides[Math.max(0, Math.min(i, this.total - 1))].scrollIntoView({ behavior: 'smooth' }); };
+  SlideEngine.prototype.update = function() {
+    var c = this.current, pct = Math.round((c + 1) / this.total * 100);
+    this.bar.style.width = pct + '%';
+    this.dots.forEach(function(d, i) { i === c ? d.setAttribute('aria-current', 'true') : d.removeAttribute('aria-current'); });
+    this.counter.textContent = (c + 1) + ' / ' + this.total + ' · ' + pct + '%';
+    try { history.replaceState(null, '', '#slide-' + (c + 1)); } catch (e) {}
+    try { localStorage.setItem(this.storeKey, String(c)); } catch (e) {}
+  };
+  SlideEngine.prototype.fadeHints = function() { clearTimeout(this.hintTimer); this.hints.classList.add('faded'); };
+
+  new SlideEngine();
+  finishSlideRender();
+</script>
+</body>
+</html>

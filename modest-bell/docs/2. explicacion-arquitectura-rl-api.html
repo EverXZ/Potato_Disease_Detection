@@ -1,0 +1,1478 @@
+<!doctype html>
+<html lang="es" data-register="blueprint">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Por dentro de AgroScan AI: API LLM, Aprendizaje por Refuerzo (RL) y Feedback</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #f6f8f7;
+      --surface: #ffffff;
+      --surface-2: #eef2f0;
+      --grid-line: rgba(15, 35, 28, 0.055);
+      --ink: #111b17;
+      --text-dim: #4c5d56;
+      --border: #d5ded9;
+      --border-bright: #7d9288;
+      --accent: #0f766e;
+      --accent-dim: rgba(15, 118, 110, 0.10);
+      --ok: #15803d;
+      --ok-bg: rgba(21, 128, 61, 0.10);
+      --warn: #b45309;
+      --warn-bg: rgba(180, 83, 9, 0.11);
+      --risk: #be123c;
+      --risk-bg: rgba(190, 18, 60, 0.10);
+      --info: #1d4ed8;
+      --info-bg: rgba(29, 78, 216, 0.09);
+
+      --f-display: 'Space Grotesk', system-ui, -apple-system, sans-serif;
+      --f-sans: 'IBM Plex Sans', system-ui, -apple-system, sans-serif;
+      --f-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, monospace;
+
+      --t-h1: clamp(1.75rem, 3.2vw, 2.55rem);
+      --t-h2: clamp(1.25rem, 2vw, 1.6rem);
+      --t-label: 0.75rem;
+      --t-small: 0.875rem;
+
+      --s-1: 4px;
+      --s-2: 8px;
+      --s-3: 12px;
+      --s-4: 16px;
+      --s-5: 24px;
+      --s-6: 32px;
+      --s-8: 56px;
+
+      --r-1: 4px;
+      --r-2: 8px;
+      --fast: 150ms;
+      --med: 260ms;
+      --slow: 420ms;
+      --ease: cubic-bezier(0.22, 1, 0.36, 1);
+      --lift: 0 6px 20px rgba(17, 27, 23, 0.07);
+    }
+
+    *, *::before, *::after { box-sizing: border-box; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      margin: 0;
+      color: var(--ink);
+      background-color: var(--bg);
+      background-image:
+        linear-gradient(to right, var(--grid-line) 1px, transparent 1px),
+        linear-gradient(to bottom, var(--grid-line) 1px, transparent 1px);
+      background-size: 24px 24px;
+      font-family: var(--f-sans);
+      font-size: 16px;
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* Section Navigation */
+    .ve-toc {
+      position: sticky;
+      top: 0;
+      z-index: 40;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--s-4);
+      padding: var(--s-3) var(--s-5);
+      background: rgba(246, 248, 247, 0.94);
+      backdrop-filter: blur(6px);
+      border-bottom: 1px solid var(--border);
+      font-size: var(--t-small);
+    }
+
+    .ve-toc-links {
+      display: flex;
+      align-items: center;
+      gap: var(--s-2);
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+    .ve-toc-links::-webkit-scrollbar { display: none; }
+
+    .ve-toc a {
+      color: var(--text-dim);
+      text-decoration: none;
+      padding: 4px 10px;
+      border-radius: var(--r-1);
+      white-space: nowrap;
+      font-weight: 500;
+      transition: background var(--fast) var(--ease), color var(--fast) var(--ease);
+    }
+    .ve-toc a:hover { color: var(--ink); background: var(--surface-2); }
+    .ve-toc a.is-active {
+      color: var(--accent);
+      background: var(--accent-dim);
+      font-weight: 600;
+    }
+
+    .ve-toc .pos {
+      font-family: var(--f-mono);
+      font-size: var(--t-label);
+      color: var(--text-dim);
+      white-space: nowrap;
+      font-variant-numeric: tabular-nums;
+    }
+
+    main {
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: var(--s-6) var(--s-5) var(--s-8);
+    }
+
+    header {
+      margin-bottom: var(--s-6);
+      padding-bottom: var(--s-5);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .eyebrow {
+      font-family: var(--f-mono);
+      font-size: var(--t-label);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--accent);
+      font-weight: 600;
+      margin: 0 0 var(--s-2);
+    }
+
+    h1 {
+      font-family: var(--f-display);
+      font-size: var(--t-h1);
+      line-height: 1.15;
+      letter-spacing: -0.02em;
+      margin: 0 0 var(--s-3);
+      max-width: 28ch;
+    }
+
+    .lead {
+      font-size: 1.08rem;
+      color: var(--text-dim);
+      max-width: 66ch;
+      margin: 0 0 var(--s-3);
+    }
+    .lead b { color: var(--ink); font-weight: 600; }
+
+    .meta {
+      font-family: var(--f-mono);
+      font-size: var(--t-label);
+      color: var(--text-dim);
+      margin: 0;
+    }
+
+    section {
+      margin-top: var(--s-8);
+      scroll-margin-top: 64px;
+    }
+
+    .sec-head {
+      margin-bottom: var(--s-4);
+    }
+
+    .ve-label {
+      font-family: var(--f-mono);
+      font-size: var(--t-label);
+      color: var(--accent);
+      font-weight: 600;
+      margin: 0 0 var(--s-1);
+    }
+    .caps { text-transform: uppercase; letter-spacing: 0.08em; }
+
+    h2 {
+      font-family: var(--f-display);
+      font-size: var(--t-h2);
+      line-height: 1.22;
+      margin: 0;
+      letter-spacing: -0.015em;
+    }
+
+    h3 {
+      font-family: var(--f-display);
+      font-size: 1.05rem;
+      margin: 0 0 var(--s-2);
+    }
+
+    p {
+      max-width: 66ch;
+      margin: 0 0 var(--s-4);
+    }
+
+    code {
+      font-family: var(--f-mono);
+      font-size: 0.88em;
+      background: var(--surface-2);
+      padding: 1px 5px;
+      border-radius: var(--r-1);
+      border: 1px solid var(--border);
+      overflow-wrap: anywhere;
+    }
+
+    pre {
+      font-family: var(--f-mono);
+      font-size: var(--t-small);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--r-2);
+      padding: var(--s-4);
+      overflow-x: auto;
+      line-height: 1.5;
+      margin: 0 0 var(--s-4);
+    }
+
+    /* KPI strip */
+    .kpis {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 1px;
+      background: var(--border);
+      border: 1px solid var(--border);
+      border-radius: var(--r-2);
+      overflow: hidden;
+      margin: var(--s-5) 0;
+    }
+    .kpi {
+      background: var(--surface);
+      padding: var(--s-4);
+      display: flex;
+      flex-direction: column;
+      gap: var(--s-1);
+    }
+    .kpi .val {
+      font-family: var(--f-display);
+      font-size: 1.6rem;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+      line-height: 1.1;
+    }
+    .kpi .unit {
+      font-size: 0.9rem;
+      font-weight: 500;
+      color: var(--text-dim);
+      margin-left: 2px;
+    }
+    .kpi .sub {
+      font-size: var(--t-label);
+      color: var(--text-dim);
+      font-family: var(--f-mono);
+    }
+
+    /* Figures & Frames */
+    figure {
+      margin: var(--s-5) 0;
+    }
+    .frame {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--r-2);
+      padding: var(--s-4);
+      overflow-x: auto;
+    }
+    figcaption {
+      margin-top: var(--s-2);
+      font-size: var(--t-small);
+      color: var(--text-dim);
+      max-width: 75ch;
+    }
+    .fig-n {
+      font-family: var(--f-mono);
+      font-weight: 600;
+      color: var(--ink);
+      margin-right: var(--s-2);
+    }
+
+    /* SVG Kit Styles */
+    .ve-svg {
+      display: block;
+      width: 100%;
+      height: auto;
+      min-width: 720px;
+      font-family: var(--f-sans);
+    }
+    .ve-bnd {
+      fill: rgba(238, 242, 240, 0.45);
+      stroke: var(--border-bright);
+      stroke-width: 1.25;
+      stroke-dasharray: 6 4;
+      rx: 8;
+    }
+    .ve-bnd-t {
+      fill: var(--text-dim);
+      font-family: var(--f-mono);
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+    .ve-n .sh {
+      fill: var(--surface);
+      stroke: var(--border-bright);
+      stroke-width: 1.6;
+      rx: 6;
+      transition: stroke var(--med) var(--ease), fill var(--med) var(--ease), opacity var(--med) var(--ease);
+    }
+    .ve-n.is-key .sh {
+      stroke: var(--accent);
+      stroke-width: 2.4;
+      fill: #f0fdfa;
+    }
+    .ve-n.is-warn .sh {
+      stroke: var(--warn);
+      stroke-width: 2;
+      fill: #fffbeb;
+    }
+    .ve-n text {
+      fill: var(--ink);
+      font-size: 14px;
+      font-weight: 600;
+      text-anchor: middle;
+      dominant-baseline: central;
+    }
+    .ve-n text.sub {
+      fill: var(--text-dim);
+      font-family: var(--f-mono);
+      font-size: 11px;
+      font-weight: 400;
+    }
+    .ve-kind {
+      fill: var(--accent);
+      font-family: var(--f-mono);
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      text-anchor: middle;
+    }
+    .ve-e {
+      fill: none;
+      stroke: var(--border-bright);
+      stroke-width: 1.75;
+      marker-end: url(#ve-ah);
+      transition: stroke var(--med) var(--ease), stroke-width var(--med) var(--ease), opacity var(--med) var(--ease);
+    }
+    .ve-e.is-hot {
+      stroke: var(--accent);
+      stroke-width: 2.6;
+      marker-end: url(#ve-ah-hot);
+    }
+    .ve-e.is-async {
+      stroke-dasharray: 5 4;
+      stroke: var(--warn);
+      marker-end: url(#ve-ah-warn);
+    }
+    .ve-e.is-risk {
+      stroke-dasharray: 4 3;
+      stroke: var(--risk);
+      marker-end: url(#ve-ah-risk);
+    }
+    .ve-el {
+      fill: var(--text-dim);
+      font-family: var(--f-mono);
+      font-size: 11.5px;
+      font-weight: 500;
+      text-anchor: middle;
+    }
+    .ve-el.l { text-anchor: end; }
+    .ve-el.r { text-anchor: start; }
+    .ve-el.hot { fill: var(--accent); font-weight: 600; }
+    .ve-el.warn { fill: var(--warn); font-weight: 600; }
+
+    .ve-tag {
+      fill: var(--text-dim);
+      font-family: var(--f-mono);
+      font-size: 11.5px;
+    }
+    .ve-tag.key { fill: var(--accent); font-weight: 600; }
+    .ve-tag.risk { fill: var(--risk); font-weight: 600; }
+
+    .ve-co circle {
+      fill: var(--surface);
+      stroke: var(--accent);
+      stroke-width: 1.75;
+      transition: fill var(--fast) var(--ease);
+    }
+    .ve-co text {
+      fill: var(--accent);
+      font-family: var(--f-mono);
+      font-size: 11px;
+      font-weight: 700;
+      text-anchor: middle;
+      dominant-baseline: central;
+    }
+    .ve-co.is-active circle { fill: var(--accent); }
+    .ve-co.is-active text { fill: #ffffff; }
+
+    /* Linked highlighting */
+    .ve-ref {
+      border-bottom: 1.5px dashed var(--accent);
+      cursor: pointer;
+      padding: 0 2px;
+      border-radius: 2px;
+      font-weight: 500;
+      transition: background var(--fast) var(--ease);
+    }
+    .ve-ref:hover, .ve-ref:focus-visible, .ve-ref.is-lit {
+      background: var(--accent-dim);
+      outline: none;
+    }
+    [data-ref].is-lit .sh, .ve-e[data-ref].is-lit {
+      stroke: var(--accent) !important;
+      stroke-width: 3 !important;
+    }
+    [data-ref].is-dimmed {
+      opacity: 0.28;
+    }
+
+    /* Stepper Player */
+    .ve-player {
+      margin-top: var(--s-3);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--r-2);
+      padding: var(--s-3) var(--s-4);
+      display: flex;
+      flex-direction: column;
+      gap: var(--s-3);
+    }
+    .ve-cap {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+    }
+    .ve-cap li {
+      display: none;
+      font-size: 0.95rem;
+      line-height: 1.45;
+    }
+    .ve-cap li.is-cur { display: block; }
+    .ve-cap li::before {
+      content: attr(data-n);
+      font-family: var(--f-mono);
+      font-size: var(--t-label);
+      font-weight: 600;
+      color: var(--accent);
+      background: var(--accent-dim);
+      padding: 2px 7px;
+      border-radius: var(--r-1);
+      margin-right: var(--s-2);
+    }
+    .ve-controls {
+      display: flex;
+      align-items: center;
+      gap: var(--s-2);
+      flex-wrap: wrap;
+    }
+    .ve-btn {
+      font-family: var(--f-mono);
+      font-size: var(--t-label);
+      font-weight: 600;
+      padding: 6px 12px;
+      border-radius: var(--r-1);
+      border: 1px solid var(--border-bright);
+      background: var(--surface);
+      color: var(--ink);
+      cursor: pointer;
+      transition: background var(--fast) var(--ease), border-color var(--fast) var(--ease);
+    }
+    .ve-btn:hover { background: var(--surface-2); border-color: var(--accent); }
+    .ve-btn[aria-pressed="true"], .ve-btn.is-primary {
+      background: var(--accent);
+      color: #ffffff;
+      border-color: var(--accent);
+    }
+    .ve-controls input[type="range"] {
+      flex: 1;
+      min-width: 140px;
+      accent-color: var(--accent);
+      cursor: pointer;
+    }
+
+    /* Stepper visibility on SVG parts */
+    [data-s] {
+      transition: opacity var(--med) var(--ease), stroke var(--med) var(--ease);
+    }
+    [data-s].is-hidden { opacity: 0.14; }
+    [data-s].is-lit-step .sh { stroke: var(--accent); stroke-width: 2.6; }
+    path[data-s].is-lit-step { stroke: var(--accent); stroke-width: 2.8; }
+
+    /* Chips */
+    .chip {
+      display: inline-block;
+      font-family: var(--f-mono);
+      font-size: 0.72rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      padding: 2px 8px;
+      border-radius: var(--r-1);
+      border: 1px solid transparent;
+    }
+    .chip.ok { background: var(--ok-bg); color: var(--ok); border-color: rgba(21,128,61,0.25); }
+    .chip.warn { background: var(--warn-bg); color: var(--warn); border-color: rgba(180,83,9,0.25); }
+    .chip.risk { background: var(--risk-bg); color: var(--risk); border-color: rgba(190,18,60,0.25); }
+    .chip.info { background: var(--info-bg); color: var(--info); border-color: rgba(29,78,216,0.25); }
+
+    /* Small Multiples */
+    .cases {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: var(--s-4);
+      margin: var(--s-4) 0;
+    }
+    .case {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--r-2);
+      padding: var(--s-4);
+      display: flex;
+      flex-direction: column;
+      gap: var(--s-2);
+    }
+    .case p { font-size: var(--t-small); color: var(--text-dim); margin: 0; }
+    .ve-mini { width: 100%; height: auto; display: block; }
+
+    /* Tables */
+    .ve-table {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--r-2);
+      overflow-x: auto;
+      margin: var(--s-4) 0;
+    }
+    .ve-table table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: var(--t-small);
+    }
+    .ve-table th, .ve-table td {
+      padding: 10px 14px;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+      vertical-align: top;
+    }
+    .ve-table tr:last-child td { border-bottom: none; }
+    .ve-table th {
+      font-family: var(--f-mono);
+      font-size: var(--t-label);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-dim);
+      background: var(--surface-2);
+    }
+    .ve-table td.num, .ve-table th.num {
+      text-align: right;
+      font-family: var(--f-mono);
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* Interactive RL Simulator */
+    .sim-grid {
+      display: grid;
+      grid-template-columns: 1.15fr 1fr;
+      gap: var(--s-4);
+      align-items: start;
+    }
+    .sim-panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--r-2);
+      padding: var(--s-4);
+    }
+    .sim-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--s-2);
+      align-items: center;
+      margin-bottom: var(--s-3);
+    }
+    .sim-row label {
+      font-family: var(--f-mono);
+      font-size: var(--t-label);
+      text-transform: uppercase;
+      color: var(--text-dim);
+      min-width: 110px;
+    }
+    .sim-select {
+      font-family: var(--f-sans);
+      font-size: var(--t-small);
+      padding: 6px 10px;
+      border-radius: var(--r-1);
+      border: 1px solid var(--border-bright);
+      background: var(--surface);
+      color: var(--ink);
+    }
+    .star-group {
+      display: inline-flex;
+      gap: 4px;
+    }
+    .star-btn {
+      font-family: var(--f-mono);
+      font-size: var(--t-small);
+      font-weight: 600;
+      padding: 5px 10px;
+      border: 1px solid var(--border-bright);
+      background: var(--surface);
+      border-radius: var(--r-1);
+      cursor: pointer;
+    }
+    .star-btn.is-sel {
+      background: var(--warn);
+      color: #fff;
+      border-color: var(--warn);
+    }
+    .formula-box {
+      font-family: var(--f-mono);
+      font-size: var(--t-small);
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: var(--r-1);
+      padding: var(--s-3);
+      margin: var(--s-3) 0;
+      font-variant-numeric: tabular-nums;
+      line-height: 1.65;
+    }
+    .q-bar-wrap {
+      display: flex;
+      align-items: center;
+      gap: var(--s-2);
+      font-family: var(--f-mono);
+      font-size: var(--t-label);
+    }
+    .q-bar-track {
+      flex: 1;
+      height: 10px;
+      background: var(--surface-2);
+      border-radius: 2px;
+      position: relative;
+      overflow: hidden;
+      border: 1px solid var(--border);
+    }
+    .q-bar-fill {
+      height: 100%;
+      background: var(--accent);
+      transition: width var(--med) var(--ease), background var(--med) var(--ease);
+    }
+    .q-bar-fill.is-neg { background: var(--risk); }
+
+    /* Callout & Q&A */
+    .callout {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--r-2);
+      padding: var(--s-4);
+      margin: var(--s-4) 0;
+    }
+    .callout p:last-child { margin-bottom: 0; }
+
+    details.qa {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--r-2);
+      padding: var(--s-3) var(--s-4);
+      margin-bottom: var(--s-3);
+    }
+    details.qa summary {
+      cursor: pointer;
+      font-weight: 600;
+      font-family: var(--f-display);
+      list-style: none;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--s-3);
+    }
+    details.qa summary::after {
+      content: "+";
+      font-family: var(--f-mono);
+      font-size: 1.1rem;
+      color: var(--accent);
+    }
+    details.qa[open] summary::after { content: "−"; }
+    details.qa .qa-body {
+      margin-top: var(--s-3);
+      padding-top: var(--s-3);
+      border-top: 1px solid var(--border);
+      font-size: 0.95rem;
+      color: var(--text-dim);
+    }
+    details.qa .qa-body strong { color: var(--ink); }
+
+    .sources {
+      margin-top: var(--s-8);
+      padding-top: var(--s-5);
+      border-top: 1px solid var(--border);
+      font-size: var(--t-small);
+      color: var(--text-dim);
+    }
+
+    @media (max-width: 860px) {
+      .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .cases { grid-template-columns: 1fr; }
+      .sim-grid { grid-template-columns: 1fr; }
+    }
+    @media print {
+      .ve-toc, .ve-controls, .sim-actions { display: none; }
+      body { background: #fff; }
+      [data-s].is-hidden { opacity: 1 !important; }
+    }
+  </style>
+</head>
+<body>
+  <nav class="ve-toc" aria-label="Secciones">
+    <div class="ve-toc-links">
+      <a href="#arquitectura">1. Arquitectura</a>
+      <a href="#que-es-rl">2. Qué es RL</a>
+      <a href="#llamada-api">3. Llamada a la API</a>
+      <a href="#ciclo-feedback">4. Feedback y Q(s,a)</a>
+      <a href="#simulador">5. Simulador en vivo</a>
+      <a href="#preguntas">6. Preguntas clave</a>
+    </div>
+    <span class="pos" id="tocPos">1 / 6</span>
+  </nav>
+
+  <main>
+    <header>
+      <p class="eyebrow">AgroScan AI · Desglose Técnico para Presentación</p>
+      <h1>El sistema separa la visión (CNN), el lenguaje (API LLM) y la adaptación (Bandido RL)</h1>
+      <p class="lead">
+        Cuando un usuario sube una hoja de papa, una red neuronal clasifica la patología, <b>un agente de Aprendizaje por Refuerzo elige el estilo de respuesta</b>, una API externa redacta la guía agronómica y las estrellas del usuario actualizan la tabla <code>Q(s, a)</code> en disco.
+      </p>
+      <p class="meta">FastAPI (app.py) · ContextualBanditAgent (rl_agent.py) · Gemini / DeepSeek (llm_service.py) · data/rl_policy.json</p>
+    </header>
+
+    <div class="kpis" aria-label="Parámetros reales del sistema">
+      <div class="kpi">
+        <span class="ve-label">Estados (enfermedades)</span>
+        <span class="val">3</span>
+        <span class="sub">Early_blight · Late_blight · healthy</span>
+      </div>
+      <div class="kpi">
+        <span class="ve-label">Acciones (estrategias)</span>
+        <span class="val">3</span>
+        <span class="sub">tecnico · practico · ecologico</span>
+      </div>
+      <div class="kpi">
+        <span class="ve-label">Exploración (ε)</span>
+        <span class="val">20<span class="unit">%</span></span>
+        <span class="sub">ε = 0.2 · 80% explotación</span>
+      </div>
+      <div class="kpi">
+        <span class="ve-label">Tasa aprendizaje (α)</span>
+        <span class="val">0.2</span>
+        <span class="sub">Q ← Q + 0.2·(r − Q)</span>
+      </div>
+    </div>
+
+    <!-- SECCIÓN 1: ARQUITECTURA END-TO-END -->
+    <section id="arquitectura">
+      <div class="sec-head">
+        <p class="ve-label caps">01 · Flujo Completo de una Petición</p>
+        <h2>Cinco pasos conectan la imagen de la hoja con la memoria del agente RL</h2>
+      </div>
+      <p>
+        El backend en <code>app.py</code> no mezcla los modelos: la <span class="ve-ref" data-ref="cnn" tabindex="0">CNN Keras</span> solo predice la enfermedad, el <span class="ve-ref" data-ref="rl" tabindex="0">agente RL</span> solo decide la estrategia, y el <span class="ve-ref" data-ref="llm" tabindex="0">servicio LLM</span> solo redacta el texto final. Al cerrar el ciclo, <span class="ve-ref" data-ref="fb" tabindex="0">POST /feedback</span> actualiza la tabla Q sin reentrenar ni la CNN ni el LLM.
+      </p>
+
+      <figure class="ve-steps" id="archStepper">
+        <div class="frame">
+          <svg class="ve-svg" viewBox="0 0 920 350" aria-label="Flujo completo desde la subida de imagen hasta la actualización Q(s,a)">
+            <defs>
+              <marker id="ve-ah" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                <path d="M 0 1 L 10 5 L 0 9 z" fill="#7d9288"/>
+              </marker>
+              <marker id="ve-ah-hot" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                <path d="M 0 1 L 10 5 L 0 9 z" fill="#0f766e"/>
+              </marker>
+              <marker id="ve-ah-warn" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                <path d="M 0 1 L 10 5 L 0 9 z" fill="#b45309"/>
+              </marker>
+              <marker id="ve-ah-risk" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                <path d="M 0 1 L 10 5 L 0 9 z" fill="#be123c"/>
+              </marker>
+            </defs>
+
+            <!-- Boundaries -->
+            <rect class="ve-bnd" x="20" y="20" width="650" height="310"/>
+            <text class="ve-bnd-t" x="34" y="39">Servidor Local · FastAPI (app.py)</text>
+
+            <rect class="ve-bnd" x="695" y="20" width="205" height="175"/>
+            <text class="ve-bnd-t" x="709" y="39">API Externa (HTTPS)</text>
+
+            <!-- Edges (drawn before nodes) -->
+            <!-- 1: Frontend -> FastAPI/CNN -->
+            <path class="ve-e is-hot" data-s="1" d="M 150 110 H 215"/>
+            <text class="ve-el hot" data-s="1" x="182" y="99">POST /predict</text>
+
+            <!-- 2: CNN -> RL Agent -->
+            <path class="ve-e is-hot" data-s="2" d="M 355 110 H 435"/>
+            <text class="ve-el hot" data-s="2" x="395" y="99">estado s</text>
+
+            <!-- 3: RL Agent -> LLM Service -->
+            <path class="ve-e is-hot" data-s="3" d="M 505 145 V 205"/>
+            <text class="ve-el r hot" data-s="3" x="514" y="177">estrategia a</text>
+
+            <!-- 3b: LLM Service -> External API -->
+            <path class="ve-e is-hot" data-s="3" d="M 590 245 H 715"/>
+            <text class="ve-el hot" data-s="3" x="652" y="234">prompt + key</text>
+
+            <!-- 4: External API -> Response -> Frontend -->
+            <path class="ve-e" data-s="4" d="M 795 150 V 295 H 90 V 145"/>
+            <text class="ve-el" data-s="4" x="450" y="284">JSON: diagnóstico + recomendación + rl_info</text>
+
+            <!-- 5: Frontend -> /feedback -> RL Agent -> JSON -->
+            <path class="ve-e is-async" data-s="5" d="M 150 130 H 185 V 166 H 465 V 145"/>
+            <text class="ve-el warn" data-s="5" x="285" y="157">POST /feedback (1–5 ★)</text>
+
+            <path class="ve-e is-async" data-s="5" d="M 435 130 H 402 V 218 H 370"/>
+            <text class="ve-el l warn" data-s="5" x="396" y="236">escribe Q(s,a)</text>
+
+            <!-- Nodes -->
+            <!-- Browser / Frontend -->
+            <g class="ve-n" data-s="1 4 5" transform="translate(30, 75)">
+              <rect class="sh" width="120" height="70"/>
+              <text class="ve-kind" x="60" y="14">Cliente</text>
+              <text x="60" y="36">index.html</text>
+              <text class="sub" x="60" y="54">fetch() JS</text>
+            </g>
+
+            <!-- CNN Keras -->
+            <g class="ve-n" data-ref="cnn" data-s="1 2" transform="translate(215, 75)">
+              <rect class="sh" width="140" height="70"/>
+              <text class="ve-kind" x="70" y="14">Visión</text>
+              <text x="70" y="36">Modelo CNN</text>
+              <text class="sub" x="70" y="54">256×256 · .keras</text>
+            </g>
+
+            <!-- RL Agent -->
+            <g class="ve-n is-key" data-ref="rl" data-s="2 3 5" transform="translate(435, 75)">
+              <rect class="sh" width="140" height="70"/>
+              <text class="ve-kind" x="70" y="14">Decisión RL</text>
+              <text x="70" y="36">Bandido ε-greedy</text>
+              <text class="sub" x="70" y="54">rl_agent.py</text>
+            </g>
+
+            <!-- LLM Service -->
+            <g class="ve-n" data-ref="llm" data-s="3 4" transform="translate(420, 205)">
+              <rect class="sh" width="170" height="70"/>
+              <text class="ve-kind" x="85" y="14">Orquestador</text>
+              <text x="85" y="36">llm_service.py</text>
+              <text class="sub" x="85" y="54">Prompts + Fallback</text>
+            </g>
+
+            <!-- External LLM API -->
+            <g class="ve-n" data-ref="llm" data-s="3 4" transform="translate(715, 75)">
+              <rect class="sh" width="165" height="75"/>
+              <text class="ve-kind" x="82" y="14">Proveedor LLM</text>
+              <text x="82" y="36">Gemini / DeepSeek</text>
+              <text class="sub" x="82" y="55">timeout 15s / 20s</text>
+            </g>
+
+            <!-- rl_policy.json -->
+            <g class="ve-n is-warn" data-ref="fb" data-s="5" transform="translate(230, 190)">
+              <rect class="sh" width="140" height="56"/>
+              <text class="ve-kind" x="70" y="13">Persistencia</text>
+              <text x="70" y="33">rl_policy.json</text>
+              <text class="sub" x="70" y="48">Tabla Q(s, a)</text>
+            </g>
+
+            <!-- Callouts -->
+            <g class="ve-co" data-s="1" transform="translate(182, 62)"><circle r="11"/><text>1</text></g>
+            <g class="ve-co" data-s="2" transform="translate(395, 62)"><circle r="11"/><text>2</text></g>
+            <g class="ve-co" data-s="3" transform="translate(652, 200)"><circle r="11"/><text>3</text></g>
+            <g class="ve-co" data-s="4" transform="translate(450, 315)"><circle r="11"/><text>4</text></g>
+            <g class="ve-co" data-s="5" transform="translate(208, 218)"><circle r="11"/><text>5</text></g>
+          </svg>
+        </div>
+
+        <div class="ve-player">
+          <ol class="ve-cap">
+            <li data-n="1 / 5">El navegador envía la imagen en <code>FormData</code> a <code>POST /predict</code>; <code>app.py</code> la redimensiona a <code>256×256</code> y ejecuta la CNN Keras.</li>
+            <li data-n="2 / 5">La CNN devuelve la clase ganadora (estado <code>s</code>, ej. <code>Potato___Early_blight</code>) y <code>rl_agent.select_action(s)</code> decide la estrategia.</li>
+            <li data-n="3 / 5"><code>llm_service.generate_recommendation()</code> arma el <code>system_prompt</code> con esa estrategia y llama a la API de Gemini o DeepSeek.</li>
+            <li data-n="4 / 5">FastAPI devuelve en un solo JSON el diagnóstico CNN, la recomendación redactada y la metadata <code>rl_info</code> (modo exploración/explotación).</li>
+            <li data-n="5 / 5">El usuario califica con 1–5 estrellas; <code>POST /feedback</code> calcula la recompensa <code>r</code>, actualiza <code>Q(s, a)</code> y guarda atómicamente en <code>data/rl_policy.json</code>.</li>
+          </ol>
+          <div class="ve-controls">
+            <button class="ve-btn" type="button" data-go="-1">← Anterior</button>
+            <button class="ve-btn is-primary" type="button" data-play>Reproducir</button>
+            <input type="range" min="1" max="5" value="5" aria-label="Paso del flujo">
+            <button class="ve-btn" type="button" data-go="1">Siguiente →</button>
+          </div>
+        </div>
+        <figcaption><span class="fig-n">Fig. 1</span>Arquitectura desacoplada: la red de visión clasifica, el agente RL elige el tono y la API externa genera el texto.</figcaption>
+      </figure>
+    </section>
+
+    <!-- SECCIÓN 2: QUÉ SIGNIFICA RL -->
+    <section id="que-es-rl">
+      <div class="sec-head">
+        <p class="ve-label caps">02 · Fundamentos de Aprendizaje por Refuerzo</p>
+        <h2>RL aprende por prueba, error y recompensa: aquí opera como Bandido Contextual</h2>
+      </div>
+      <p>
+        <strong>Reinforcement Learning (RL)</strong> es una rama del Machine Learning donde un <em>agente</em> aprende a tomar decisiones interactuando con un <em>entorno</em>. A diferencia del aprendizaje supervisado (que necesita ejemplos etiquetados de "la respuesta correcta"), el RL solo recibe una señal numérica llamada <strong>recompensa</strong> después de actuar.
+      </p>
+      <p>
+        En este proyecto, el algoritmo exacto es un <strong>Contextual Multi-Armed Bandit</strong> (Bandido Multibrazo Contextual) implementado en <code>ContextualBanditAgent</code> (<code>rl_agent.py:22</code>). ¿Por qué "contextual"? Porque la mejor acción depende del contexto actual (la enfermedad detectada).
+      </p>
+
+      <div class="cases">
+        <div class="case">
+          <span class="chip info">Contexto = Estado (s)</span>
+          <h3>Qué ve el agente</h3>
+          <p>La clase predicha por la CNN: <code>Potato___Early_blight</code>, <code>Potato___Late_blight</code> o <code>Potato___healthy</code>.</p>
+        </div>
+        <div class="case">
+          <span class="chip ok">Decisión = Acción (a)</span>
+          <h3>Qué elige el agente</h3>
+          <p>El estilo del prompt enviado al LLM: <code>tecnico</code> (FRAC/dosis), <code>practico</code> (pasos en campo) o <code>ecologico</code> (MIP orgánico).</p>
+        </div>
+        <div class="case">
+          <span class="chip warn">Señal = Recompensa (r)</span>
+          <h3>Cómo aprende</h3>
+          <p>Las estrellas del usuario (1 a 5) convertidas a escala <code>[−1.0, +1.0]</code> ajustan el valor esperado <code>Q(s, a)</code>.</p>
+        </div>
+      </div>
+
+      <h3>El dilema Exploración vs. Explotación (política ε-greedy)</h3>
+      <p>
+        Si el agente eligiera siempre la estrategia con mayor puntaje <code>Q</code>, jamás descubriría si otra estrategia gusta más. Por eso <code>select_action()</code> (<code>rl_agent.py:199</code>) tira un número aleatorio entre 0 y 1:
+      </p>
+      <div class="ve-table">
+        <table>
+          <thead>
+            <tr>
+              <th>Condición</th>
+              <th>Probabilidad</th>
+              <th>Modo</th>
+              <th>Comportamiento en código (<code>rl_agent.py:207-218</code>)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>random() &lt; 0.2</code></td>
+              <td class="num">20%</td>
+              <td><span class="chip warn">Exploración</span></td>
+              <td>Elige al azar entre las 3 acciones (<code>tecnico</code>, <code>practico</code>, <code>ecologico</code>) para probar alternativas.</td>
+            </tr>
+            <tr>
+              <td><code>random() &ge; 0.2</code></td>
+              <td class="num">80%</td>
+              <td><span class="chip ok">Explotación</span></td>
+              <td>Elige la acción con mayor <code>Q(s, a)</code> para esa enfermedad (si hay empate, desempata al azar).</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- SECCIÓN 3: POR DENTRO DE LA LLAMADA A LA API -->
+    <section id="llamada-api">
+      <div class="sec-head">
+        <p class="ve-label caps">03 · Anatomía de la Llamada a la API</p>
+        <h2>La estrategia elegida por RL se inyecta en el System Prompt antes de salir a Internet</h2>
+      </div>
+      <p>
+        El LLM no "sabe" RL ni lee la tabla Q. Quien traduce la decisión del agente en instrucciones concretas es <code>build_prompts()</code> en <code>llm_service.py:91</code>. Según la estrategia (<code>tecnico</code>, <code>practico</code> o <code>ecologico</code>), cambia el rol del <code>system_prompt</code>, mientras el <code>user_prompt</code> lleva el diagnóstico numérico de la CNN.
+      </p>
+
+      <figure>
+        <div class="frame">
+          <svg class="ve-svg" viewBox="0 0 920 310" aria-label="Cascada de proveedores LLM y fallback estructurado en llm_service.py">
+            <defs>
+              <marker id="ve-ah2" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                <path d="M 0 1 L 10 5 L 0 9 z" fill="#7d9288"/>
+              </marker>
+            </defs>
+
+            <!-- Left: Prompt Builder -->
+            <g class="ve-n is-key" transform="translate(20, 95)">
+              <rect class="sh" width="185" height="90"/>
+              <text class="ve-kind" x="92" y="14">llm_service.py</text>
+              <text x="92" y="38">build_prompts()</text>
+              <text class="sub" x="92" y="58">system_prompt (rol RL)</text>
+              <text class="sub" x="92" y="74">+ user_prompt (CNN)</text>
+            </g>
+
+            <!-- Middle: Router -->
+            <g class="ve-n" transform="translate(260, 105)">
+              <rect class="sh" width="150" height="70"/>
+              <text class="ve-kind" x="75" y="14">Env Var</text>
+              <text x="75" y="36">LLM_PROVIDER</text>
+              <text class="sub" x="75" y="54">default: "gemini"</text>
+            </g>
+
+            <!-- Edge Prompt -> Router -->
+            <path class="ve-e is-hot" d="M 205 140 H 260"/>
+
+            <!-- Branch 1: Gemini -->
+            <path class="ve-e is-hot" d="M 410 120 H 460 V 62 H 500"/>
+            <text class="ve-el hot" x="455" y="50">gemini</text>
+
+            <g class="ve-n" transform="translate(500, 22)">
+              <rect class="sh" width="215" height="80"/>
+              <text class="ve-kind" x="107" y="14">SDK google-genai</text>
+              <text x="107" y="36">_call_gemini()</text>
+              <text class="sub" x="107" y="54">gemini-2.5-flash → 3.7 → 3.5-lite</text>
+              <text class="sub" x="107" y="69">temp=0.4 · max=700 · 15s</text>
+            </g>
+
+            <!-- Branch 2: DeepSeek -->
+            <path class="ve-e" d="M 410 140 H 500"/>
+            <text class="ve-el" x="455" y="130">deepseek</text>
+
+            <g class="ve-n" transform="translate(500, 118)">
+              <rect class="sh" width="215" height="66"/>
+              <text class="ve-kind" x="107" y="14">SDK openai</text>
+              <text x="107" y="34">_call_deepseek()</text>
+              <text class="sub" x="107" y="51">api.deepseek.com · 20s</text>
+            </g>
+
+            <!-- Branch 3: Fallback -->
+            <path class="ve-e is-risk" d="M 410 160 H 460 V 245 H 500"/>
+            <text class="ve-el" style="fill:#be123c" x="452" y="236">error / sin key</text>
+
+            <g class="ve-n is-warn" transform="translate(500, 205)">
+              <rect class="sh" width="215" height="76"/>
+              <text class="ve-kind" x="107" y="14">Contingencia Local</text>
+              <text x="107" y="36">build_structured_fallback()</text>
+              <text class="sub" x="107" y="54">Plantillas por estado+estrategia</text>
+              <text class="sub" x="107" y="68">Garantiza &gt; 200 caracteres</text>
+            </g>
+
+            <!-- Right: Output -->
+            <path class="ve-e is-hot" d="M 715 62 H 760 V 140 H 785"/>
+            <path class="ve-e" d="M 715 151 H 785"/>
+            <path class="ve-e is-risk" d="M 715 243 H 760 V 160 H 785"/>
+
+            <g class="ve-n is-key" transform="translate(785, 110)">
+              <rect class="sh" width="115" height="80"/>
+              <text class="ve-kind" x="57" y="14">Salida</text>
+              <text x="57" y="36">Respuesta</text>
+              <text class="sub" x="57" y="54">is_fallback</text>
+              <text class="sub" x="57" y="69">char_count</text>
+            </g>
+          </svg>
+        </div>
+        <figcaption><span class="fig-n">Fig. 2</span>Resiliencia de la API: si la clave falta, caduca o hay timeout, el sistema cae a plantillas locales sin romper la app.</figcaption>
+      </figure>
+
+      <div class="ve-table">
+        <table>
+          <thead>
+            <tr>
+              <th>Endpoint</th>
+              <th>Cuándo se llama</th>
+              <th>Qué envía al LLM</th>
+              <th>Nota clave para preguntas</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>POST /predict</code></td>
+              <td>Al subir la hoja de papa</td>
+              <td>Diagnóstico CNN + estrategia del agente RL (o override manual)</td>
+              <td><code>temperature=0.4</code>, máximo <code>700</code> tokens de salida.</td>
+            </tr>
+            <tr>
+              <td><code>POST /regenerate</code></td>
+              <td>Al cambiar estrategia en UI</td>
+              <td>Mismo diagnóstico guardado en frontend + nueva estrategia</td>
+              <td><strong>No</strong> vuelve a correr la CNN; ahorra cómputo y tiempo.</td>
+            </tr>
+            <tr>
+              <td><code>POST /chat</code></td>
+              <td>Preguntas de seguimiento</td>
+              <td>Diagnóstico + recomendación inicial + últimos <strong>8 turnos</strong></td>
+              <td>Mantiene el rol de la estrategia activa en formato Markdown.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- SECCIÓN 4: FEEDBACK Y ACTUALIZACIÓN Q(s, a) -->
+    <section id="ciclo-feedback">
+      <div class="sec-head">
+        <p class="ve-label caps">04 · Cómo se hace Feedback al Modelo mediante RL</p>
+        <h2>Cada calificación de 1 a 5 estrellas mueve el valor Q(s, a) un 20% hacia la recompensa</h2>
+      </div>
+      <p>
+        Cuando el usuario califica la recomendación en la interfaz, el frontend envía <code>{disease_id, strategy, rating, comment}</code> a <code>POST /feedback</code> (<code>app.py:375</code>). Por dentro, <code>rl_agent.update()</code> ejecuta exactamente tres operaciones matemáticas y una escritura atómica en disco:
+      </p>
+
+      <div class="cases">
+        <div class="case">
+          <span class="chip info">Paso 1 · Normalización</span>
+          <h3><code>r = (rating − 3) / 2.0</code></h3>
+          <p>1★ = <code>−1.0</code> · 2★ = <code>−0.5</code> · 3★ = <code>0.0</code> (neutral) · 4★ = <code>+0.5</code> · 5★ = <code>+1.0</code>.</p>
+        </div>
+        <div class="case">
+          <span class="chip ok">Paso 2 · Regla de actualización</span>
+          <h3><code>Q ← Q + α · (r − Q)</code></h3>
+          <p>Con <code>α = 0.2</code>, el agente no olvida todo de golpe: promedia exponencialmente el historial con la nueva opinión.</p>
+        </div>
+        <div class="case">
+          <span class="chip warn">Paso 3 · Persistencia atómica</span>
+          <h3><code>mkstemp → fsync → replace</code></h3>
+          <p>Bajo <code>threading.Lock</code>, escribe un archivo temporal y lo reemplaza sobre <code>data/rl_policy.json</code> para evitar corrupción.</p>
+        </div>
+      </div>
+
+      <div class="callout">
+        <p class="ve-label caps"><span class="chip ok">Estado real observado en data/rl_policy.json</span></p>
+        <p>
+          El archivo actual del proyecto registra <strong>1 feedback real</strong>: estado <code>Potato___Early_blight</code>, acción <code>ecologico</code>, calificación <strong>5 estrellas</strong> (<code>r = +1.0</code>). Como <code>Q_before</code> era <code>0.0</code>, el cálculo fue <code>0.0 + 0.2 × (1.0 − 0.0) = 0.2</code>. Por eso hoy, en 80% de los casos (explotación), para Tizón Temprano el agente preferirá <code>ecologico</code>.
+        </p>
+      </div>
+    </section>
+
+    <!-- SECCIÓN 5: SIMULADOR INTERACTIVO -->
+    <section id="simulador">
+      <div class="sec-head">
+        <p class="ve-label caps">05 · Demostración Interactiva para Mañana</p>
+        <h2>Simulador en vivo de ε-greedy y actualización de la tabla Q(s, a)</h2>
+      </div>
+      <p>
+        Usa este panel durante tu presentación para demostrar en vivo cómo el agente decide entre explorar y explotar, y cómo una calificación de 1 a 5 estrellas altera la tabla <code>Q(s, a)</code> paso a paso.
+      </p>
+
+      <div class="sim-grid">
+        <div class="sim-panel">
+          <div class="sim-row">
+            <label for="simState">Estado (s)</label>
+            <select id="simState" class="sim-select">
+              <option value="Potato___Early_blight">Potato___Early_blight (Tizón Temprano)</option>
+              <option value="Potato___Late_blight">Potato___Late_blight (Tizón Tardío)</option>
+              <option value="Potato___healthy">Potato___healthy (Planta Sana)</option>
+            </select>
+          </div>
+
+          <div class="sim-row">
+            <label>1. Decisión RL</label>
+            <button type="button" class="ve-btn is-primary" id="btnSelectAction">Ejecutar select_action(s)</button>
+            <span id="simDecisionChip" class="chip info">Listo</span>
+          </div>
+
+          <div class="sim-row">
+            <label for="simAction">Acción (a)</label>
+            <select id="simAction" class="sim-select">
+              <option value="tecnico">tecnico</option>
+              <option value="practico">practico</option>
+              <option value="ecologico" selected>ecologico</option>
+            </select>
+          </div>
+
+          <div class="sim-row">
+            <label>2. Calificación</label>
+            <div class="star-group" id="starGroup">
+              <button type="button" class="star-btn" data-r="1">1★</button>
+              <button type="button" class="star-btn" data-r="2">2★</button>
+              <button type="button" class="star-btn" data-r="3">3★</button>
+              <button type="button" class="star-btn" data-r="4">4★</button>
+              <button type="button" class="star-btn is-sel" data-r="5">5★</button>
+            </div>
+          </div>
+
+          <div class="sim-row sim-actions">
+            <label>3. Feedback</label>
+            <button type="button" class="ve-btn is-primary" id="btnApplyFeedback">Aplicar update(s, a, rating)</button>
+            <button type="button" class="ve-btn" id="btnResetSim">Reiniciar al JSON real</button>
+          </div>
+
+          <div class="formula-box" id="simFormula">
+            r = (5 − 3) / 2.0 = +1.00<br>
+            Q_nuevo = Q_actual + 0.2 × (r − Q_actual)
+          </div>
+        </div>
+
+        <div class="sim-panel">
+          <h3 style="margin-bottom:12px;">Tabla Q(s, a) del estado seleccionado</h3>
+          <div id="simQRows" style="display:flex; flex-direction:column; gap:14px;"></div>
+          <p id="simBestNote" style="margin-top:16px; margin-bottom:0; font-size:0.875rem; color:var(--text-dim); font-family:var(--f-mono);"></p>
+        </div>
+      </div>
+    </section>
+
+    <!-- SECCIÓN 6: BANCO DE PREGUNTAS DIFÍCILES -->
+    <section id="preguntas">
+      <div class="sec-head">
+        <p class="ve-label caps">06 · Preparación para la Defensa</p>
+        <h2>Preguntas que probablemente te harán mañana y respuestas exactas</h2>
+      </div>
+
+      <details class="qa" open>
+        <summary>1. ¿El Aprendizaje por Refuerzo modifica los pesos de la CNN o del modelo de Gemini/DeepSeek?</summary>
+        <div class="qa-body">
+          <strong>No.</strong> La CNN (<code>.keras</code>) está congelada en inferencia (<code>training=False</code>, <code>torch.no_grad()</code>) y la API de Gemini/DeepSeek es un servicio externo sin fine-tuning. El agente RL solo aprende <strong>qué estrategia de prompt</strong> (<code>tecnico</code>, <code>practico</code> o <code>ecologico</code>) maximiza la satisfacción del usuario para cada enfermedad, guardando 9 valores flotantes en <code>data/rl_policy.json</code>.
+        </div>
+      </details>
+
+      <details class="qa">
+        <summary>2. ¿Por qué usar un Contextual Bandit y no Q-Learning completo o Deep RL?</summary>
+        <div class="qa-body">
+          Porque cada diagnóstico es un episodio independiente de <strong>un solo paso</strong>: la recomendación que das hoy para una hoja no cambia la enfermedad de la siguiente hoja que suba otro agricultor (no hay transición de estado <code>s → s'</code> ni factor de descuento <code>γ</code>). Un Bandido Contextual converge rápido con pocos feedbacks humanos, sin necesitar miles de datos ni GPU.
+        </div>
+      </details>
+
+      <details class="qa">
+        <summary>3. ¿Qué pasa si falla Internet, se acaba la cuota de Gemini o no hay API Key?</summary>
+        <div class="qa-body">
+          <code>llm_service.py</code> nunca deja al usuario sin respuesta: primero intenta una cascada de modelos Gemini (<code>gemini-2.5-flash</code> y fallbacks) con timeout de 15s; si todos fallan o la clave no es válida, activa <code>build_structured_fallback()</code>, que entrega una guía agronómica local adaptada a la enfermedad y estrategia, garantizando más de 200 caracteres y marcando <code>is_fallback: true</code>.
+        </div>
+      </details>
+
+      <details class="qa">
+        <summary>4. ¿Qué ocurre si el usuario califica con 1 estrella una estrategia que ya tenía buen puntaje?</summary>
+        <div class="qa-body">
+          La calificación de 1 estrella produce recompensa negativa <code>r = (1 − 3) / 2.0 = −1.0</code>. Con <code>α = 0.2</code>, <code>Q(s, a)</code> baja un 20% de la distancia hacia <code>−1.0</code>. Si cae por debajo de otra estrategia, en la siguiente explotación (80% de las veces) el agente cambiará automáticamente a la nueva estrategia ganadora.
+        </div>
+      </details>
+
+      <details class="qa">
+        <summary>5. ¿Se pierde lo que aprendió el agente si se reinicia el servidor o hay dos usuarios a la vez?</summary>
+        <div class="qa-body">
+          <strong>No se pierde ni se corrompe.</strong> Al arrancar, <code>ContextualBanditAgent</code> carga <code>data/rl_policy.json</code>. Cada actualización usa un <code>threading.Lock()</code> para evitar condiciones de carrera entre peticiones simultáneas y escribe mediante archivo temporal + <code>os.fsync()</code> + <code>os.replace()</code> (escritura atómica).
+        </div>
+      </details>
+    </section>
+
+    <section class="sources" aria-label="Fuentes del código">
+      <p class="ve-label caps">Archivos verificados en esta explicación</p>
+      <p>
+        <code>app.py</code> (endpoints <code>/predict</code>, <code>/feedback</code>, <code>/regenerate</code>, <code>/chat</code>, <code>/rl-stats</code>) ·
+        <code>rl_agent.py</code> (<code>ContextualBanditAgent</code>, <code>select_action</code>, <code>update</code>) ·
+        <code>llm_service.py</code> (<code>build_prompts</code>, <code>_call_gemini</code>, <code>_call_deepseek</code>, <code>build_structured_fallback</code>) ·
+        <code>data/rl_policy.json</code> ·
+        <code>templates/index.html</code>
+      </p>
+    </section>
+  </main>
+
+  <script>
+    (function () {
+      // 1. Section TOC active tracking
+      const tocLinks = Array.from(document.querySelectorAll('.ve-toc a'));
+      const tocPos = document.getElementById('tocPos');
+      const sections = tocLinks.map(a => document.querySelector(a.getAttribute('href'))).filter(Boolean);
+
+      function updateToc() {
+        let activeIdx = 0;
+        const y = window.scrollY + 120;
+        sections.forEach((sec, idx) => {
+          if (sec.offsetTop <= y) activeIdx = idx;
+        });
+        tocLinks.forEach((a, idx) => a.classList.toggle('is-active', idx === activeIdx));
+        if (tocPos) tocPos.textContent = (activeIdx + 1) + ' / ' + sections.length;
+      }
+      window.addEventListener('scroll', updateToc, { passive: true });
+      updateToc();
+
+      // 2. Linked highlighting (data-ref)
+      const refs = document.querySelectorAll('[data-ref]');
+      function setRef(name, on) {
+        if (!name) return;
+        const all = document.querySelectorAll('[data-ref]');
+        all.forEach(el => {
+          const list = (el.getAttribute('data-ref') || '').split(/\s+/);
+          if (list.includes(name)) {
+            el.classList.toggle('is-lit', on);
+            el.classList.remove('is-dimmed');
+          } else if (el.closest('svg')) {
+            el.classList.toggle('is-dimmed', on);
+          }
+        });
+      }
+      refs.forEach(el => {
+        if (el.classList.contains('ve-ref')) {
+          const name = el.getAttribute('data-ref');
+          el.addEventListener('mouseenter', () => setRef(name, true));
+          el.addEventListener('mouseleave', () => setRef(name, false));
+          el.addEventListener('focus', () => setRef(name, true));
+          el.addEventListener('blur', () => setRef(name, false));
+        }
+      });
+
+      // 3. Stepper for Fig. 1
+      const stepper = document.getElementById('archStepper');
+      if (stepper) {
+        const caps = Array.from(stepper.querySelectorAll('.ve-cap li'));
+        const range = stepper.querySelector('input[type="range"]');
+        const playBtn = stepper.querySelector('[data-play]');
+        const prevBtn = stepper.querySelector('[data-go="-1"]');
+        const nextBtn = stepper.querySelector('[data-go="1"]');
+        const parts = Array.from(stepper.querySelectorAll('[data-s]'));
+        let curStep = caps.length;
+        let timer = null;
+
+        function renderStep(step) {
+          curStep = Math.max(1, Math.min(caps.length, step));
+          caps.forEach((li, i) => li.classList.toggle('is-cur', i === curStep - 1));
+          if (range) range.value = String(curStep);
+
+          parts.forEach(el => {
+            const list = (el.getAttribute('data-s') || '').trim().split(/\s+/).map(Number);
+            const first = Math.min(...list);
+            const visible = curStep >= first;
+            const activeNow = list.includes(curStep);
+            el.classList.toggle('is-hidden', !visible);
+            el.classList.toggle('is-lit-step', activeNow);
+            if (el.classList.contains('ve-co')) {
+              el.classList.toggle('is-active', activeNow);
+            }
+          });
+        }
+
+        function stopPlay() {
+          if (timer) { clearInterval(timer); timer = null; }
+          if (playBtn) {
+            playBtn.textContent = 'Reproducir';
+            playBtn.setAttribute('aria-pressed', 'false');
+          }
+        }
+
+        if (prevBtn) prevBtn.addEventListener('click', () => { stopPlay(); renderStep(curStep - 1); });
+        if (nextBtn) nextBtn.addEventListener('click', () => { stopPlay(); renderStep(curStep + 1); });
+        if (range) range.addEventListener('input', (e) => { stopPlay(); renderStep(Number(e.target.value)); });
+        if (playBtn) {
+          playBtn.addEventListener('click', () => {
+            if (timer) { stopPlay(); return; }
+            renderStep(1);
+            playBtn.textContent = 'Pausar';
+            playBtn.setAttribute('aria-pressed', 'true');
+            timer = setInterval(() => {
+              if (curStep >= caps.length) { stopPlay(); return; }
+              renderStep(curStep + 1);
+            }, 1900);
+          });
+        }
+        renderStep(caps.length);
+      }
+
+      // 4. Interactive RL Simulator
+      const INITIAL_Q = {
+        Potato___Early_blight: { tecnico: 0.0, practico: 0.0, ecologico: 0.2 },
+        Potato___Late_blight:  { tecnico: 0.0, practico: 0.0, ecologico: 0.0 },
+        Potato___healthy:      { tecnico: 0.0, practico: 0.0, ecologico: 0.0 }
+      };
+      const ACTIONS = ['tecnico', 'practico', 'ecologico'];
+      const EPSILON = 0.2;
+      const ALPHA = 0.2;
+
+      let qTable = JSON.parse(JSON.stringify(INITIAL_Q));
+      let simRating = 5;
+
+      const simState = document.getElementById('simState');
+      const simAction = document.getElementById('simAction');
+      const simDecisionChip = document.getElementById('simDecisionChip');
+      const simQRows = document.getElementById('simQRows');
+      const simBestNote = document.getElementById('simBestNote');
+      const simFormula = document.getElementById('simFormula');
+      const starBtns = Array.from(document.querySelectorAll('#starGroup .star-btn'));
+
+      function renderSimTable() {
+        const s = simState.value;
+        const row = qTable[s];
+        const maxQ = Math.max(...ACTIONS.map(a => row[a]));
+        const bests = ACTIONS.filter(a => Math.abs(row[a] - maxQ) < 1e-9);
+
+        simQRows.innerHTML = '';
+        ACTIONS.forEach(a => {
+          const val = row[a];
+          const pct = Math.min(100, Math.round(Math.abs(val) * 100));
+          const isBest = bests.includes(a);
+          const wrap = document.createElement('div');
+          wrap.innerHTML = `
+            <div style="display:flex;justify-content:space-between;margin-bottom:4px;font-family:var(--f-mono);font-size:0.82rem;">
+              <span><strong>${a}</strong> ${isBest ? '<span class="chip ok">Mejor Q</span>' : ''}</span>
+              <span>${val >= 0 ? '+' : ''}${val.toFixed(4)}</span>
+            </div>
+            <div class="q-bar-wrap">
+              <div class="q-bar-track">
+                <div class="q-bar-fill ${val < 0 ? 'is-neg' : ''}" style="width:${pct}%"></div>
+              </div>
+            </div>
+          `;
+          simQRows.appendChild(wrap);
+        });
+
+        simBestNote.textContent = `Política actual (80% explotación): ${bests.join(' o ')} (Q = ${maxQ.toFixed(4)})`;
+      }
+
+      function updateFormulaPreview(qBefore, qAfter) {
+        const r = (simRating - 3) / 2.0;
+        const rStr = (r >= 0 ? '+' : '') + r.toFixed(2);
+        if (typeof qBefore === 'number' && typeof qAfter === 'number') {
+          simFormula.innerHTML =
+            `r = (${simRating} − 3) / 2.0 = <strong>${rStr}</strong><br>` +
+            `Q_nuevo = ${qBefore.toFixed(4)} + ${ALPHA} × (${rStr} − ${qBefore.toFixed(4)}) = <strong>${qAfter.toFixed(4)}</strong>`;
+        } else {
+          simFormula.innerHTML =
+            `r = (${simRating} − 3) / 2.0 = <strong>${rStr}</strong><br>` +
+            `Q_nuevo = Q_actual + ${ALPHA} × (${rStr} − Q_actual)`;
+        }
+      }
+
+      starBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+          simRating = Number(btn.getAttribute('data-r'));
+          starBtns.forEach(b => b.classList.toggle('is-sel', b === btn));
+          updateFormulaPreview();
+        });
+      });
+
+      simState.addEventListener('change', () => {
+        renderSimTable();
+        updateFormulaPreview();
+      });
+
+      document.getElementById('btnSelectAction').addEventListener('click', () => {
+        const s = simState.value;
+        const row = qTable[s];
+        const roll = Math.random();
+        let chosen;
+        if (roll < EPSILON) {
+          chosen = ACTIONS[Math.floor(Math.random() * ACTIONS.length)];
+          simDecisionChip.className = 'chip warn';
+          simDecisionChip.textContent = `Exploración (roll=${roll.toFixed(2)} < 0.2) → ${chosen}`;
+        } else {
+          const maxQ = Math.max(...ACTIONS.map(a => row[a]));
+          const bests = ACTIONS.filter(a => Math.abs(row[a] - maxQ) < 1e-9);
+          chosen = bests[Math.floor(Math.random() * bests.length)];
+          simDecisionChip.className = 'chip ok';
+          simDecisionChip.textContent = `Explotación (roll=${roll.toFixed(2)} ≥ 0.2) → ${chosen}`;
+        }
+        simAction.value = chosen;
+      });
+
+      document.getElementById('btnApplyFeedback').addEventListener('click', () => {
+        const s = simState.value;
+        const a = simAction.value;
+        const r = (simRating - 3) / 2.0;
+        const qBefore = qTable[s][a];
+        const qAfter = qBefore + ALPHA * (r - qBefore);
+        qTable[s][a] = qAfter;
+        updateFormulaPreview(qBefore, qAfter);
+        renderSimTable();
+      });
+
+      document.getElementById('btnResetSim').addEventListener('click', () => {
+        qTable = JSON.parse(JSON.stringify(INITIAL_Q));
+        simDecisionChip.className = 'chip info';
+        simDecisionChip.textContent = 'Reiniciado al JSON real';
+        renderSimTable();
+        updateFormulaPreview();
+      });
+
+      renderSimTable();
+      updateFormulaPreview();
+    })();
+  </script>
+</body>
+</html>
