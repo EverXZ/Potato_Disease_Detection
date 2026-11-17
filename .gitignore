@@ -1,0 +1,17 @@
+# Environment & Secrets
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.venv/
+venv/
+ENV/
+
+# Runtime RL Policy Persistence
+modest-bell/data/rl_policy.json
+data/rl_policy.json

@@ -10,10 +10,15 @@ if "KERAS_BACKEND" not in os.environ:
 
 import numpy as np
 from PIL import Image
-from fastapi import FastAPI, File, UploadFile, Request
+from dotenv import load_dotenv
+from fastapi import FastAPI, File, Form, UploadFile, Request
 from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from pydantic import BaseModel, Field, field_validator
+
+import llm_service
+from rl_agent import ACTIONS, ContextualBanditAgent
 
 # Intentar importar keras de forma segura
 try:
@@ -30,17 +35,64 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# Configurar rutas de carpetas
+# Configurar rutas de carpetas y variables de entorno
 BASE_DIR = Path(__file__).resolve().parent
+load_dotenv(dotenv_path=BASE_DIR / ".env", override=False, encoding="utf-8")
+
 TEMPLATES_DIR = BASE_DIR / "templates"
 STATIC_DIR = BASE_DIR / "static"
 MODELS_DIR = BASE_DIR / "models"
+DATA_DIR = BASE_DIR / "data"
 MODELS_DIR.mkdir(exist_ok=True)
 STATIC_DIR.mkdir(exist_ok=True)
 
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
+
+# Agente de Aprendizaje por Refuerzo (Contextual Multi-Armed Bandit)
+rl_agent = ContextualBanditAgent(policy_path=DATA_DIR / "rl_policy.json")
+
+
+class FeedbackRequest(BaseModel):
+    disease_id: str = Field(..., min_length=1, max_length=128)
+    strategy: str = Field(..., min_length=1)
+    rating: int = Field(..., ge=1, le=5)
+    comment: Optional[str] = Field(default="", max_length=500)
+
+    @field_validator("rating", mode="before")
+    @classmethod
+    def reject_bool_rating(cls, value):
+        if isinstance(value, bool):
+            raise ValueError("La calificación debe ser un número entero entre 1 y 5, no booleano.")
+        return value
+
+
+class RegenerateRequest(BaseModel):
+    disease_id: str = Field(..., min_length=1, max_length=128)
+    disease_name: str = Field(..., min_length=1, max_length=128)
+    scientific_name: str = Field(..., min_length=1, max_length=128)
+    confidence: float = Field(default=90.0)
+    severity: str = Field(default="Moderada")
+    breakdown: list[dict] = Field(default_factory=list)
+    strategy: str = Field(default="auto")
+
+
+class ChatTurn(BaseModel):
+    role: str = Field(..., pattern="^(user|assistant)$")
+    content: str = Field(..., min_length=1, max_length=4000)
+
+
+class ChatRequest(BaseModel):
+    disease_id: str = Field(..., min_length=1, max_length=128)
+    disease_name: str = Field(..., min_length=1, max_length=128)
+    scientific_name: str = Field(..., min_length=1, max_length=128)
+    confidence: float = Field(default=90.0)
+    severity: str = Field(default="Moderada")
+    strategy: str = Field(default="practico")
+    initial_recommendation: str = Field(default="")
+    history: list[ChatTurn] = Field(default_factory=list)
+    message: str = Field(..., min_length=1, max_length=1500)
 
 # Clases del dataset PlantVillage
 CLASS_INFO = {
@@ -168,12 +220,15 @@ async def get_model_status():
     }
 
 @app.post("/predict")
-async def predict(file: UploadFile = File(...)):
+async def predict(
+    file: UploadFile = File(...),
+    strategy_override: Optional[str] = Form(default="auto"),
+):
     """
     Recibe una imagen de hoja de papa, la preprocesa a 224x224
     y devuelve la predicción con probabilidades y recomendaciones.
     """
-    if not file.content_type.startswith("image/"):
+    if not (file.content_type or "").startswith("image/"):
         return JSONResponse(
             status_code=400,
             content={"error": "El archivo proporcionado no es una imagen válida."}
@@ -251,6 +306,7 @@ async def predict(file: UploadFile = File(...)):
         for idx, p in enumerate(probs):
             breakdown.append({
                 "class_idx": idx,
+                "disease_id": CLASS_INFO[idx]["id"],
                 "name": CLASS_INFO[idx]["name"],
                 "scientific_name": CLASS_INFO[idx]["scientific_name"],
                 "probability": float(round(p * 100, 5)),
@@ -260,21 +316,53 @@ async def predict(file: UploadFile = File(...)):
         # Ordenar de mayor a menor probabilidad
         breakdown.sort(key=lambda x: x["probability"], reverse=True)
 
+        confidence_pct = round(confidence * 100, 5)
+
+        # Selección de estrategia mediante agente RL o selección manual del usuario
+        clean_override = (strategy_override or "auto").strip().lower()
+        rl_info = rl_agent.select_action(info["id"])
+        if clean_override in ACTIONS:
+            rl_info["strategy"] = clean_override
+            rl_info["mode"] = "manual"
+            rl_info["mode_label"] = "Selección Manual"
+            rl_info["is_exploration"] = False
+
+        llm_result = llm_service.generate_recommendation(
+            disease_id=info["id"],
+            disease_name=info["name"],
+            scientific_name=info["scientific_name"],
+            confidence=confidence_pct,
+            severity=info["severity"],
+            breakdown=breakdown,
+            strategy=rl_info["strategy"],
+        )
+
         return {
             "success": True,
             "is_demo": is_demo,
             "model_file": model_source_path or "Modo Demostración (Coloca tu .keras en models/)",
             "prediction": {
                 "class_index": predicted_idx,
+                "disease_id": info["id"],
                 "disease_name": info["name"],
                 "scientific_name": info["scientific_name"],
                 "severity": info["severity"],
                 "color": info["color"],
-                "confidence": round(confidence * 100, 5),
+                "confidence": confidence_pct,
                 "description": info["description"],
                 "recommendations": info["recommendations"]
             },
-            "breakdown": breakdown
+            "breakdown": breakdown,
+            "llm_recommendation": llm_result["recommendation"],
+            "llm_info": {
+                "provider": llm_result["provider"],
+                "model": llm_result["model"],
+                "strategy": llm_result["strategy"],
+                "char_count": llm_result["char_count"],
+                "is_fallback": llm_result["is_fallback"],
+                "fallback_reason": llm_result["fallback_reason"],
+            },
+            "rl_info": rl_info,
         }
 
     except Exception as e:
@@ -282,6 +370,115 @@ async def predict(file: UploadFile = File(...)):
             status_code=500,
             content={"error": f"Error al procesar la imagen: {str(e)}"}
         )
+
+
+@app.post("/feedback")
+async def submit_feedback(payload: FeedbackRequest):
+    """Registra la calificación de 1 a 5 estrellas y actualiza la tabla Q(s, a) del agente RL."""
+    disease_id = payload.disease_id.strip()
+    if not disease_id:
+        return JSONResponse(
+            status_code=400,
+            content={"error": "El campo 'disease_id' no puede estar vacío."}
+        )
+    if payload.strategy not in ACTIONS:
+        return JSONResponse(
+            status_code=400,
+            content={"error": f"Estrategia inválida: {payload.strategy}. Valores permitidos: {', '.join(ACTIONS)}."}
+        )
+
+    try:
+        update_result = rl_agent.update(
+            state=disease_id,
+            action=payload.strategy,
+            rating=payload.rating,
+            comment=payload.comment,
+        )
+        return {
+            "success": True,
+            "update": update_result,
+            "stats": rl_agent.get_stats(),
+        }
+    except ValueError as e:
+        return JSONResponse(status_code=400, content={"error": str(e)})
+    except Exception as e:
+        return JSONResponse(
+            status_code=500,
+            content={"error": f"Error al registrar retroalimentación: {str(e)}"}
+        )
+
+
+@app.get("/rl-stats")
+async def get_rl_stats():
+    """Devuelve las métricas en vivo, tabla Q(s, a), conteos y feedback reciente del agente RL."""
+    return rl_agent.get_stats()
+
+
+@app.post("/regenerate")
+async def regenerate_recommendation(payload: RegenerateRequest):
+    """Permite cambiar el modo de estrategia (o pedirle al agente RL otra selección) sin volver a subir la imagen."""
+    clean_strategy = (payload.strategy or "auto").strip().lower()
+    rl_info = rl_agent.select_action(payload.disease_id.strip())
+    if clean_strategy in ACTIONS:
+        rl_info["strategy"] = clean_strategy
+        rl_info["mode"] = "manual"
+        rl_info["mode_label"] = "Selección Manual"
+        rl_info["is_exploration"] = False
+
+    llm_result = llm_service.generate_recommendation(
+        disease_id=payload.disease_id.strip(),
+        disease_name=payload.disease_name.strip(),
+        scientific_name=payload.scientific_name.strip(),
+        confidence=payload.confidence,
+        severity=payload.severity.strip(),
+        breakdown=payload.breakdown,
+        strategy=rl_info["strategy"],
+    )
+    return {
+        "success": True,
+        "llm_recommendation": llm_result["recommendation"],
+        "llm_info": {
+            "provider": llm_result["provider"],
+            "model": llm_result["model"],
+            "strategy": llm_result["strategy"],
+            "char_count": llm_result["char_count"],
+            "is_fallback": llm_result["is_fallback"],
+            "fallback_reason": llm_result["fallback_reason"],
+        },
+        "rl_info": rl_info,
+    }
+
+
+@app.post("/chat")
+async def chat_with_assistant(payload: ChatRequest):
+    """Continúa la conversación con el asistente IA sobre el diagnóstico actual."""
+    question = payload.message.strip()
+    if not question:
+        return JSONResponse(status_code=400, content={"error": "El mensaje no puede estar vacío."})
+
+    chat_result = llm_service.chat_followup(
+        disease_id=payload.disease_id.strip(),
+        disease_name=payload.disease_name.strip(),
+        scientific_name=payload.scientific_name.strip(),
+        confidence=payload.confidence,
+        severity=payload.severity.strip(),
+        strategy=payload.strategy.strip(),
+        initial_recommendation=payload.initial_recommendation,
+        history=[{"role": t.role, "content": t.content} for t in payload.history],
+        user_message=question,
+    )
+    return {
+        "success": True,
+        "reply": chat_result["reply"],
+        "llm_info": {
+            "provider": chat_result["provider"],
+            "model": chat_result["model"],
+            "strategy": chat_result["strategy"],
+            "char_count": chat_result["char_count"],
+            "is_fallback": chat_result["is_fallback"],
+            "fallback_reason": chat_result["fallback_reason"],
+        },
+    }
 
 if __name__ == "__main__":
     import uvicorn

@@ -11,6 +11,9 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- FontAwesome Icons -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <!-- Marked.js + DOMPurify para renderizar respuestas Markdown de la IA de forma segura -->
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
   <script>
     tailwind.config = {
       theme: {
@@ -45,13 +48,62 @@
       box-shadow: 0 0 15px #10b981;
       animation: scan 2s infinite ease-in-out;
     }
+    /* Estilos limpios para contenido Markdown generado por el LLM */
+    .markdown-body h1, .markdown-body h2, .markdown-body h3, .markdown-body h4 {
+      font-weight: 700;
+      color: #0f172a;
+      margin-top: 0.75rem;
+      margin-bottom: 0.35rem;
+      line-height: 1.35;
+    }
+    .markdown-body h1 { font-size: 1.05rem; }
+    .markdown-body h2 { font-size: 0.98rem; }
+    .markdown-body h3, .markdown-body h4 { font-size: 0.9rem; }
+    .markdown-body p {
+      margin-bottom: 0.6rem;
+    }
+    .markdown-body p:last-child {
+      margin-bottom: 0;
+    }
+    .markdown-body ul {
+      list-style-type: disc;
+      padding-left: 1.25rem;
+      margin-bottom: 0.6rem;
+    }
+    .markdown-body ol {
+      list-style-type: decimal;
+      padding-left: 1.25rem;
+      margin-bottom: 0.6rem;
+    }
+    .markdown-body li {
+      margin-bottom: 0.25rem;
+    }
+    .markdown-body strong {
+      font-weight: 700;
+      color: #0f172a;
+    }
+    .markdown-body code {
+      background-color: #e2e8f0;
+      color: #0f172a;
+      padding: 0.1rem 0.35rem;
+      border-radius: 0.25rem;
+      font-size: 0.8em;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    }
+    .markdown-body blockquote {
+      border-left: 3px solid #6366f1;
+      padding-left: 0.75rem;
+      color: #475569;
+      font-style: italic;
+      margin: 0.5rem 0;
+    }
   </style>
 </head>
 <body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col font-sans">
 
   <!-- Encabezado / Barra superior -->
   <header class="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-sm">
-    <div class="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
+    <div class="w-full pl-2 sm:pl-3 pr-4 sm:pr-6 lg:pr-8 py-3 flex items-center justify-between">
       <div class="flex items-center space-x-3">
         <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-emerald-600 to-green-500 flex items-center justify-center text-white shadow-md shadow-emerald-500/20">
           <i class="fa-solid fa-seedling text-lg"></i>
@@ -80,7 +132,7 @@
   </header>
 
   <!-- Contenedor Principal -->
-  <main class="flex-1 max-w-6xl w-full mx-auto p-4 sm:p-6 lg:p-8">
+  <main class="flex-1 w-full py-4 sm:py-6 lg:py-8 pl-0 sm:pl-2 pr-4 sm:pr-6 lg:pr-8">
 
     <!-- Banner informativo si no hay modelo .keras colocado -->
     {% if not has_model %}
@@ -95,92 +147,165 @@
     </div>
     {% endif %}
 
-    <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
       
-      <!-- COLUMNA IZQUIERDA: Formulario de Carga y Previsualización (5 columnas) -->
-      <div class="lg:col-span-5 bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-        <h2 class="text-base font-bold text-slate-900 mb-1 flex items-center gap-2">
-          <i class="fa-solid fa-cloud-arrow-up text-emerald-600"></i>
-          Subir Fotografía de la Hoja
-        </h2>
-        <p class="text-xs text-slate-500 mb-4">Soporta formatos JPG, PNG o WEBP de hojas de cultivo.</p>
+      <!-- COLUMNA IZQUIERDA: Formulario de Carga y Panel RL (4 columnas) -->
+      <div class="lg:col-span-4 space-y-6">
+        <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+          <h2 class="text-base font-bold text-slate-900 mb-1 flex items-center gap-2">
+            <i class="fa-solid fa-cloud-arrow-up text-emerald-600"></i>
+            Subir Fotografía de la Hoja
+          </h2>
+          <p class="text-xs text-slate-500 mb-4">Soporta formatos JPG, PNG o WEBP de hojas de cultivo.</p>
 
-        <!-- Formulario Interactivo -->
-        <form id="uploadForm" class="space-y-4">
-          <!-- Zona Dropzone -->
-          <div id="dropZone" class="relative group border-2 border-dashed border-slate-300 hover:border-emerald-500 transition-all rounded-xl p-6 text-center cursor-pointer bg-slate-50 hover:bg-emerald-50/30 flex flex-col items-center justify-center min-h-[220px]">
-            <input type="file" id="fileInput" name="file" accept="image/*" class="hidden">
-            
-            <!-- Vista vacía (placeholder) -->
-            <div id="placeholderView" class="flex flex-col items-center space-y-3">
-              <div class="w-14 h-14 rounded-full bg-slate-100 group-hover:bg-emerald-100 flex items-center justify-center text-slate-400 group-hover:text-emerald-600 transition-colors">
-                <i class="fa-regular fa-image text-2xl"></i>
+          <!-- Formulario Interactivo -->
+          <form id="uploadForm" class="space-y-4">
+            <!-- Zona Dropzone -->
+            <div id="dropZone" class="relative group border-2 border-dashed border-slate-300 hover:border-emerald-500 transition-all rounded-xl p-6 text-center cursor-pointer bg-slate-50 hover:bg-emerald-50/30 flex flex-col items-center justify-center min-h-[220px]">
+              <input type="file" id="fileInput" name="file" accept="image/*" class="hidden">
+              
+              <!-- Vista vacía (placeholder) -->
+              <div id="placeholderView" class="flex flex-col items-center space-y-3">
+                <div class="w-14 h-14 rounded-full bg-slate-100 group-hover:bg-emerald-100 flex items-center justify-center text-slate-400 group-hover:text-emerald-600 transition-colors">
+                  <i class="fa-regular fa-image text-2xl"></i>
+                </div>
+                <div>
+                  <p class="text-sm font-semibold text-slate-700 group-hover:text-emerald-700">Arrastra una imagen aquí</p>
+                  <p class="text-xs text-slate-400 mt-1">o haz clic para explorar tus archivos</p>
+                </div>
+                <span class="inline-block px-2.5 py-1 text-[11px] font-medium bg-white text-slate-500 rounded border border-slate-200 shadow-2xs">
+                  Máximo 10 MB
+                </span>
               </div>
-              <div>
-                <p class="text-sm font-semibold text-slate-700 group-hover:text-emerald-700">Arrastra una imagen aquí</p>
-                <p class="text-xs text-slate-400 mt-1">o haz clic para explorar tus archivos</p>
-              </div>
-              <span class="inline-block px-2.5 py-1 text-[11px] font-medium bg-white text-slate-500 rounded border border-slate-200 shadow-2xs">
-                Máximo 10 MB
-              </span>
-            </div>
 
-            <!-- Vista con previsualización -->
-            <div id="previewView" class="hidden relative w-full h-full flex flex-col items-center">
-              <div class="relative max-h-56 w-full rounded-lg overflow-hidden bg-slate-900 flex items-center justify-center shadow-inner">
-                <img id="imagePreview" src="#" alt="Previsualización" class="max-h-56 w-auto object-contain">
-                <!-- Efecto Escáner animado durante predicción -->
-                <div id="scannerOverlay" class="hidden absolute inset-0 bg-emerald-950/20 backdrop-blur-[1px]">
-                  <div class="scanner-line"></div>
-                  <div class="absolute inset-0 flex items-center justify-center">
-                    <span class="bg-black/70 text-emerald-400 text-xs font-semibold px-3 py-1.5 rounded-full flex items-center gap-2">
-                      <i class="fa-solid fa-spinner fa-spin"></i> Analizando con Red Neuronal...
-                    </span>
+              <!-- Vista con previsualización -->
+              <div id="previewView" class="hidden relative w-full h-full flex flex-col items-center">
+                <div class="relative max-h-56 w-full rounded-lg overflow-hidden bg-slate-900 flex items-center justify-center shadow-inner">
+                  <img id="imagePreview" src="#" alt="Previsualización" class="max-h-56 w-auto object-contain">
+                  <!-- Efecto Escáner animado durante predicción -->
+                  <div id="scannerOverlay" class="hidden absolute inset-0 bg-emerald-950/20 backdrop-blur-[1px]">
+                    <div class="scanner-line"></div>
+                    <div class="absolute inset-0 flex items-center justify-center">
+                      <span class="bg-black/70 text-emerald-400 text-xs font-semibold px-3 py-1.5 rounded-full flex items-center gap-2">
+                        <i class="fa-solid fa-spinner fa-spin"></i> Analizando con Red Neuronal...
+                      </span>
+                    </div>
                   </div>
                 </div>
+                <p id="fileNameText" class="text-xs text-slate-500 mt-2 truncate max-w-[260px] font-mono"></p>
               </div>
-              <p id="fileNameText" class="text-xs text-slate-500 mt-2 truncate max-w-[260px] font-mono"></p>
             </div>
-          </div>
 
-          <!-- Botones de Acción -->
-          <div class="flex gap-2">
-            <button type="button" id="clearBtn" class="hidden flex-1 py-2.5 px-4 rounded-xl border border-slate-200 text-slate-600 font-semibold text-xs hover:bg-slate-50 transition-colors">
-              <i class="fa-solid fa-trash mr-1"></i> Quitar
-            </button>
-            <button type="submit" id="submitBtn" disabled class="flex-1 py-2.5 px-4 rounded-xl bg-slate-200 text-slate-400 font-semibold text-xs cursor-not-allowed transition-all flex items-center justify-center gap-2 shadow-sm">
-              <i class="fa-solid fa-microscope text-sm"></i>
-              <span>Diagnosticar Hoja</span>
-            </button>
-          </div>
-        </form>
+            <!-- Selector de Modo de Estrategia -->
+            <div class="bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-1.5">
+              <label for="strategyOverrideSelect" class="block text-xs font-bold text-slate-700 flex items-center justify-between">
+                <span><i class="fa-solid fa-sliders text-indigo-600 mr-1"></i> Modo de Estrategia del Prompt</span>
+                <span class="text-[10px] font-normal text-slate-400">RL o Manual</span>
+              </label>
+              <select id="strategyOverrideSelect" name="strategy_override" class="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                <option value="auto" selected>🤖 Automático — Agente RL (ε-greedy)</option>
+                <option value="tecnico">🔬 Técnico — Fitopatología, grupos FRAC y dosis</option>
+                <option value="practico">🌾 Práctico — Guía paso a paso en campo</option>
+                <option value="ecologico">🌱 Ecológico — Agroecología y control biológico (MIP)</option>
+              </select>
+            </div>
 
-        <!-- Información de clases soportadas -->
-        <div class="mt-6 pt-5 border-t border-slate-100">
-          <p class="text-xs font-semibold text-slate-700 uppercase tracking-wider mb-2">Patologías Evaluadas:</p>
-          <div class="space-y-1.5 text-xs text-slate-600">
-            <div class="flex items-center gap-2">
-              <span class="w-2.5 h-2.5 rounded-full bg-amber-500"></span>
-              <span class="font-medium text-slate-800">Tizón Temprano</span>
-              <span class="text-slate-400 text-[11px] italic">(Alternaria solani)</span>
+            <!-- Botones de Acción -->
+            <div class="flex gap-2">
+              <button type="button" id="clearBtn" class="hidden flex-1 py-2.5 px-4 rounded-xl border border-slate-200 text-slate-600 font-semibold text-xs hover:bg-slate-50 transition-colors">
+                <i class="fa-solid fa-trash mr-1"></i> Quitar
+              </button>
+              <button type="submit" id="submitBtn" disabled class="flex-1 py-2.5 px-4 rounded-xl bg-slate-200 text-slate-400 font-semibold text-xs cursor-not-allowed transition-all flex items-center justify-center gap-2 shadow-sm">
+                <i class="fa-solid fa-microscope text-sm"></i>
+                <span>Diagnosticar Hoja</span>
+              </button>
             </div>
-            <div class="flex items-center gap-2">
-              <span class="w-2.5 h-2.5 rounded-full bg-red-500"></span>
-              <span class="font-medium text-slate-800">Tizón Tardío</span>
-              <span class="text-slate-400 text-[11px] italic">(Phytophthora infestans)</span>
-            </div>
-            <div class="flex items-center gap-2">
-              <span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
-              <span class="font-medium text-slate-800">Planta Sana</span>
-              <span class="text-slate-400 text-[11px] italic">(Follaje Saludable)</span>
+          </form>
+
+          <!-- Información de clases soportadas -->
+          <div class="mt-6 pt-5 border-t border-slate-100">
+            <p class="text-xs font-semibold text-slate-700 uppercase tracking-wider mb-2">Patologías Evaluadas:</p>
+            <div class="space-y-1.5 text-xs text-slate-600">
+              <div class="flex items-center gap-2">
+                <span class="w-2.5 h-2.5 rounded-full bg-amber-500"></span>
+                <span class="font-medium text-slate-800">Tizón Temprano</span>
+                <span class="text-slate-400 text-[11px] italic">(Alternaria solani)</span>
+              </div>
+              <div class="flex items-center gap-2">
+                <span class="w-2.5 h-2.5 rounded-full bg-red-500"></span>
+                <span class="font-medium text-slate-800">Tizón Tardío</span>
+                <span class="text-slate-400 text-[11px] italic">(Phytophthora infestans)</span>
+              </div>
+              <div class="flex items-center gap-2">
+                <span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+                <span class="font-medium text-slate-800">Planta Sana</span>
+                <span class="text-slate-400 text-[11px] italic">(Follaje Saludable)</span>
+              </div>
             </div>
           </div>
         </div>
 
+        <!-- Panel de Métricas RL en Vivo (Siempre visible) -->
+        <div id="rlStatsPanel" class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-4">
+          <div class="flex items-center justify-between gap-2">
+            <div>
+              <h2 class="text-base font-bold text-slate-900 flex items-center gap-2">
+                <i class="fa-solid fa-brain text-indigo-600"></i>
+                Panel de Métricas RL en Vivo
+              </h2>
+              <p class="text-[11px] text-slate-500">Contextual Bandit (ε-greedy) y tabla Q(s, a)</p>
+            </div>
+            <span id="rlEpsilonBadge" class="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200 font-mono">
+              ε = 0.20
+            </span>
+          </div>
+
+          <!-- Resumen numérico -->
+          <div class="grid grid-cols-2 gap-3">
+            <div class="bg-slate-50 border border-slate-100 rounded-xl p-3">
+              <span class="text-[11px] text-slate-500 block font-medium">Total Feedbacks</span>
+              <span id="rlTotalFeedbacks" class="text-lg font-extrabold text-slate-900 font-mono">0</span>
+            </div>
+            <div class="bg-slate-50 border border-slate-100 rounded-xl p-3">
+              <span class="text-[11px] text-slate-500 block font-medium">Recompensa Promedio</span>
+              <span id="rlAvgReward" class="text-lg font-extrabold text-emerald-600 font-mono">0.000</span>
+            </div>
+          </div>
+
+          <!-- Tabla Q(s, a) -->
+          <div>
+            <p class="text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-2">Tabla Q(s, a) por Estrategia</p>
+            <div class="overflow-x-auto border border-slate-200 rounded-xl">
+              <table class="w-full text-left border-collapse text-xs">
+                <thead>
+                  <tr class="bg-slate-50 text-slate-600 border-b border-slate-200 text-[11px]">
+                    <th class="py-2 px-2.5 font-semibold">Estado (s)</th>
+                    <th class="py-2 px-2 font-semibold text-center">Técnico</th>
+                    <th class="py-2 px-2 font-semibold text-center">Práctico</th>
+                    <th class="py-2 px-2 font-semibold text-center">Ecológico</th>
+                  </tr>
+                </thead>
+                <tbody id="rlQTableBody" class="divide-y divide-slate-100 text-[11px]">
+                  <tr>
+                    <td colspan="4" class="py-3 text-center text-slate-400">Cargando métricas RL...</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Últimos feedbacks -->
+          <div>
+            <p class="text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-1.5">Feedback Reciente</p>
+            <ul id="rlRecentFeedback" class="space-y-1.5 text-[11px] text-slate-600">
+              <li class="text-slate-400 italic">Aún no hay calificaciones registradas.</li>
+            </ul>
+          </div>
+        </div>
       </div>
 
-      <!-- COLUMNA DERECHA: Resultados del Diagnóstico (7 columnas) -->
-      <div class="lg:col-span-7 space-y-6">
+      <!-- COLUMNA DERECHA: Resultados del Diagnóstico (8 columnas) -->
+      <div class="lg:col-span-8 space-y-6">
         
         <!-- Estado Inicial: Esperando Imagen -->
         <div id="emptyResultState" class="bg-white p-10 rounded-2xl shadow-sm border border-slate-200 text-center flex flex-col items-center justify-center min-h-[380px]">
@@ -199,7 +324,7 @@
           <!-- Tarjeta de Diagnóstico Principal -->
           <div id="resultCard" class="bg-white rounded-2xl shadow-sm border overflow-hidden transition-all">
             <!-- Barra superior coloreada según enfermedad -->
-            <div id="cardHeader" class="px-6 py-4 border-b flex items-center justify-between">
+            <div id="cardHeader" class="px-6 py-4 flex items-center justify-between">
               <div>
                 <span id="severityBadge" class="inline-block px-2.5 py-0.5 rounded-full text-[11px] font-bold tracking-wide uppercase mb-1"></span>
                 <h3 id="diseaseTitle" class="text-xl font-extrabold text-slate-900 tracking-tight"></h3>
@@ -212,23 +337,135 @@
                 <span id="confidenceText" class="text-2xl font-black text-slate-900">0%</span>
               </div>
             </div>
+          </div>
 
-            <!-- Cuerpo del Resultado -->
-            <div class="p-6 space-y-5">
-              <!-- Descripción Patológica -->
-              <div>
-                <h4 class="text-xs font-bold text-slate-700 uppercase tracking-wider mb-1 flex items-center gap-1.5">
-                  <i class="fa-solid fa-notes-medical text-slate-500"></i> Descripción y Síntomas
-                </h4>
-                <p id="diseaseDesc" class="text-sm text-slate-600 leading-relaxed bg-slate-50 p-3.5 rounded-xl border border-slate-100"></p>
+          <!-- Tarjeta de Recomendación Generativa (LLM + Agente RL) -->
+          <div id="llmCard" class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+            <div class="px-6 py-4 bg-gradient-to-r from-indigo-50/80 via-emerald-50/60 to-white border-b border-slate-100 flex flex-wrap items-center justify-between gap-2">
+              <div class="flex items-center gap-2">
+                <div class="w-8 h-8 rounded-lg bg-indigo-600 text-white flex items-center justify-center shadow-sm">
+                  <i class="fa-solid fa-wand-magic-sparkles text-sm"></i>
+                </div>
+                <div>
+                  <h4 class="text-sm font-bold text-slate-900">Recomendación Agronómica Inteligente (LLM + RL)</h4>
+                  <p class="text-[11px] text-slate-500">Generada dinámicamente según la estrategia del agente RL</p>
+                </div>
+              </div>
+              <div class="flex flex-wrap items-center gap-1.5">
+                <span id="llmProviderBadge" class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-slate-100 text-slate-700 border border-slate-200"></span>
+                <span id="rlStrategyBadge" class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-indigo-100 text-indigo-800 border border-indigo-200"></span>
+                <span id="rlModeBadge" class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-semibold"></span>
+                <span id="llmCharCountBadge" class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-mono font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200"></span>
+              </div>
+            </div>
+
+            <div class="p-6 space-y-4">
+              <!-- Barra rápida para cambiar de estrategia en vivo sin re-subir la imagen -->
+              <div class="flex flex-wrap items-center justify-between gap-2 bg-slate-50 px-3.5 py-2.5 rounded-xl border border-slate-200/80">
+                <span class="text-xs font-semibold text-slate-600 flex items-center gap-1.5">
+                  <i class="fa-solid fa-repeat text-indigo-600"></i>
+                  Cambiar estrategia al instante:
+                </span>
+                <div class="flex flex-wrap items-center gap-1.5">
+                  <button type="button" data-switch-strategy="tecnico" class="strategy-switch-btn px-2.5 py-1 rounded-lg text-xs font-semibold border border-slate-200 bg-white text-slate-700 hover:border-indigo-300 hover:text-indigo-700 transition-all">
+                    🔬 Técnico
+                  </button>
+                  <button type="button" data-switch-strategy="practico" class="strategy-switch-btn px-2.5 py-1 rounded-lg text-xs font-semibold border border-slate-200 bg-white text-slate-700 hover:border-indigo-300 hover:text-indigo-700 transition-all">
+                    🌾 Práctico
+                  </button>
+                  <button type="button" data-switch-strategy="ecologico" class="strategy-switch-btn px-2.5 py-1 rounded-lg text-xs font-semibold border border-slate-200 bg-white text-slate-700 hover:border-indigo-300 hover:text-indigo-700 transition-all">
+                    🌱 Ecológico
+                  </button>
+                  <button type="button" data-switch-strategy="auto" class="strategy-switch-btn px-2.5 py-1 rounded-lg text-xs font-semibold border border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 transition-all" title="Dejar que el Agente RL elija nuevamente">
+                    🤖 Agente RL
+                  </button>
+                </div>
               </div>
 
-              <!-- Recomendaciones Agronómicas -->
-              <div>
-                <h4 class="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                  <i class="fa-solid fa-clipboard-check text-emerald-600"></i> Medidas Recomendadas
-                </h4>
-                <ul id="recommendationsList" class="space-y-2 text-xs text-slate-700"></ul>
+              <div id="llmRecommendationText" class="markdown-body text-sm text-slate-700 leading-relaxed bg-slate-50 p-4 rounded-xl border border-slate-100"></div>
+              <p id="llmFallbackNote" class="hidden text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-1.5 flex items-center gap-1.5"></p>
+
+              <!-- Widget Interactivo de Calificación (Feedback RL) -->
+              <div id="feedbackWidget" class="pt-4 border-t border-slate-100 space-y-3">
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <h5 class="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                      <i class="fa-solid fa-star text-amber-400"></i>
+                      Califica esta recomendación (Feedback RL)
+                    </h5>
+                    <p class="text-[11px] text-slate-500">Tu calificación actualiza Q(s, a) para mejorar futuras estrategias.</p>
+                  </div>
+                  <span id="ratingLabel" class="text-xs font-semibold text-slate-500">Selecciona de 1 a 5 estrellas</span>
+                </div>
+
+                <div id="starRatingContainer" class="flex items-center gap-2" role="radiogroup" aria-label="Calificación de 1 a 5 estrellas">
+                  <button type="button" class="star-btn w-9 h-9 rounded-lg border border-slate-200 bg-slate-50 text-slate-300 hover:text-amber-400 hover:border-amber-300 transition-colors flex items-center justify-center text-lg" data-rating="1" aria-label="1 estrella">
+                    <i class="fa-solid fa-star"></i>
+                  </button>
+                  <button type="button" class="star-btn w-9 h-9 rounded-lg border border-slate-200 bg-slate-50 text-slate-300 hover:text-amber-400 hover:border-amber-300 transition-colors flex items-center justify-center text-lg" data-rating="2" aria-label="2 estrellas">
+                    <i class="fa-solid fa-star"></i>
+                  </button>
+                  <button type="button" class="star-btn w-9 h-9 rounded-lg border border-slate-200 bg-slate-50 text-slate-300 hover:text-amber-400 hover:border-amber-300 transition-colors flex items-center justify-center text-lg" data-rating="3" aria-label="3 estrellas">
+                    <i class="fa-solid fa-star"></i>
+                  </button>
+                  <button type="button" class="star-btn w-9 h-9 rounded-lg border border-slate-200 bg-slate-50 text-slate-300 hover:text-amber-400 hover:border-amber-300 transition-colors flex items-center justify-center text-lg" data-rating="4" aria-label="4 estrellas">
+                    <i class="fa-solid fa-star"></i>
+                  </button>
+                  <button type="button" class="star-btn w-9 h-9 rounded-lg border border-slate-200 bg-slate-50 text-slate-300 hover:text-amber-400 hover:border-amber-300 transition-colors flex items-center justify-center text-lg" data-rating="5" aria-label="5 estrellas">
+                    <i class="fa-solid fa-star"></i>
+                  </button>
+                </div>
+
+                <textarea id="feedbackComment" rows="2" maxlength="500" placeholder="Comentario opcional sobre la utilidad agronómica de la recomendación..." class="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white transition-all"></textarea>
+
+                <div class="flex flex-wrap items-center justify-between gap-3">
+                  <button type="button" id="submitFeedbackBtn" disabled class="py-2 px-4 rounded-xl bg-slate-200 text-slate-400 font-semibold text-xs cursor-not-allowed transition-all flex items-center gap-2">
+                    <i class="fa-solid fa-paper-plane"></i>
+                    <span>Enviar Calificación</span>
+                  </button>
+                  <div id="feedbackStatus" class="hidden text-xs font-medium px-3 py-1.5 rounded-lg"></div>
+                </div>
+              </div>
+
+              <!-- Chat de Seguimiento: Continuar la conversación con la IA -->
+              <div id="chatSection" class="pt-4 border-t border-slate-100 space-y-3">
+                <div class="flex items-center justify-between">
+                  <div>
+                    <h5 class="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                      <i class="fa-solid fa-comments text-indigo-600"></i>
+                      Seguir la Conversación con AgroScan AI
+                    </h5>
+                    <p class="text-[11px] text-slate-500">Haz preguntas sobre dosis, tiempos de aplicación, prevención o cuidados del cultivo.</p>
+                  </div>
+                  <button type="button" id="clearChatBtn" class="text-[11px] text-slate-400 hover:text-slate-600 font-medium">
+                    <i class="fa-solid fa-rotate-left mr-0.5"></i> Limpiar chat
+                  </button>
+                </div>
+
+                <!-- Sugerencias rápidas -->
+                <div class="flex flex-wrap gap-1.5">
+                  <button type="button" class="chat-suggestion-btn text-[11px] px-2.5 py-1 rounded-full bg-slate-100 hover:bg-indigo-50 text-slate-600 hover:text-indigo-700 border border-slate-200 transition-colors">
+                    ¿Cada cuántos días aplico el tratamiento?
+                  </button>
+                  <button type="button" class="chat-suggestion-btn text-[11px] px-2.5 py-1 rounded-full bg-slate-100 hover:bg-indigo-50 text-slate-600 hover:text-indigo-700 border border-slate-200 transition-colors">
+                    ¿Qué precauciones debo tener con el riego?
+                  </button>
+                  <button type="button" class="chat-suggestion-btn text-[11px] px-2.5 py-1 rounded-full bg-slate-100 hover:bg-indigo-50 text-slate-600 hover:text-indigo-700 border border-slate-200 transition-colors">
+                    ¿Cómo evito que se contagien las plantas sanas?
+                  </button>
+                </div>
+
+                <!-- Contenedor de mensajes -->
+                <div id="chatMessagesContainer" class="hidden max-h-80 overflow-y-auto space-y-3 p-3 rounded-xl bg-slate-50 border border-slate-200/80"></div>
+
+                <!-- Input para enviar pregunta -->
+                <div class="flex gap-2">
+                  <input type="text" id="chatInput" maxlength="1000" placeholder="Escribe tu pregunta sobre este diagnóstico..." class="flex-1 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all">
+                  <button type="button" id="sendChatBtn" class="py-2 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs transition-all flex items-center gap-1.5 shadow-sm shrink-0">
+                    <i class="fa-solid fa-paper-plane"></i>
+                    <span>Preguntar</span>
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -273,6 +510,59 @@
     const activeResultState = document.getElementById('activeResultState');
 
     let currentFile = null;
+    let lastDiagnosis = null;
+    let chatHistory = [];
+    let selectedRating = 0;
+    let feedbackSubmitted = false;
+    let predictRequestId = 0;
+    let predictAbortController = null;
+
+    const strategyOverrideSelect = document.getElementById('strategyOverrideSelect');
+
+    const STRATEGY_LABELS = {
+      tecnico: 'Técnico',
+      practico: 'Práctico',
+      ecologico: 'Ecológico',
+    };
+
+    const STATE_LABELS = {
+      Potato___Early_blight: 'Tizón Temprano',
+      Potato___Late_blight: 'Tizón Tardío',
+      Potato___healthy: 'Planta Sana',
+    };
+
+    const RATING_LABELS = {
+      1: '1 estrella — Muy poco útil',
+      2: '2 estrellas — Poco útil',
+      3: '3 estrellas — Aceptable',
+      4: '4 estrellas — Muy útil',
+      5: '5 estrellas — Excelente',
+    };
+
+    function escapeHtml(text) {
+      return String(text ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    function renderMarkdown(rawText) {
+      const text = String(rawText ?? '');
+      if (window.marked && typeof window.marked.parse === 'function') {
+        const html = window.marked.parse(text, { breaks: true, gfm: true });
+        if (window.DOMPurify && typeof window.DOMPurify.sanitize === 'function') {
+          return window.DOMPurify.sanitize(html);
+        }
+        return html;
+      }
+      // Fallback básico si no hay conexión a CDN
+      return escapeHtml(text)
+        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\*(.+?)\*/g, '<em>$1</em>')
+        .replace(/\n/g, '<br>');
+    }
 
     // Manejo de clic en Dropzone
     dropZone.addEventListener('click', () => fileInput.click());
@@ -328,18 +618,32 @@
 
     clearBtn.addEventListener('click', (e) => {
       e.stopPropagation();
+      predictRequestId += 1;
+      if (predictAbortController) {
+        predictAbortController.abort();
+        predictAbortController = null;
+      }
+
       fileInput.value = '';
       currentFile = null;
+      lastDiagnosis = null;
+      chatHistory = [];
+      resetFeedbackWidget();
+      resetChatWidget();
+
+      scannerOverlay.classList.add('hidden');
       placeholderView.classList.remove('hidden');
       previewView.classList.add('hidden');
       clearBtn.classList.add('hidden');
 
       submitBtn.disabled = true;
+      submitBtn.innerHTML = '<i class="fa-solid fa-microscope text-sm"></i><span>Diagnosticar Hoja</span>';
       submitBtn.classList.add('bg-slate-200', 'text-slate-400', 'cursor-not-allowed');
       submitBtn.classList.remove('bg-emerald-600', 'hover:bg-emerald-700', 'text-white', 'shadow-emerald-600/20');
 
       emptyResultState.classList.remove('hidden');
       activeResultState.classList.add('hidden');
+      loadRlStats();
     });
 
     // Envío asíncrono con Fetch API
@@ -347,8 +651,17 @@
       e.preventDefault();
       if (!currentFile) return;
 
+      const requestId = ++predictRequestId;
+      if (predictAbortController) {
+        predictAbortController.abort();
+      }
+      predictAbortController = new AbortController();
+
       const formData = new FormData();
       formData.append('file', currentFile);
+      if (strategyOverrideSelect) {
+        formData.append('strategy_override', strategyOverrideSelect.value || 'auto');
+      }
 
       // Activar escáner y deshabilitar botón
       scannerOverlay.classList.remove('hidden');
@@ -358,10 +671,14 @@
       try {
         const response = await fetch('/predict', {
           method: 'POST',
-          body: formData
+          body: formData,
+          signal: predictAbortController.signal
         });
 
         const data = await response.json();
+        if (requestId !== predictRequestId) {
+          return;
+        }
 
         if (!response.ok) {
           throw new Error(data.error || 'Error al procesar la imagen');
@@ -370,11 +687,24 @@
         renderResults(data);
 
       } catch (err) {
+        if (err && err.name === 'AbortError') {
+          return;
+        }
+        if (requestId !== predictRequestId) {
+          return;
+        }
         alert('Ocurrió un error en el diagnóstico: ' + err.message);
       } finally {
-        scannerOverlay.classList.add('hidden');
-        submitBtn.disabled = false;
-        submitBtn.innerHTML = '<i class="fa-solid fa-microscope text-sm"></i><span>Diagnosticar Hoja</span>';
+        if (requestId === predictRequestId) {
+          predictAbortController = null;
+          scannerOverlay.classList.add('hidden');
+          if (currentFile) {
+            submitBtn.disabled = false;
+          } else {
+            submitBtn.disabled = true;
+          }
+          submitBtn.innerHTML = '<i class="fa-solid fa-microscope text-sm"></i><span>Diagnosticar Hoja</span>';
+        }
       }
     });
 
@@ -396,37 +726,41 @@
       diseaseTitle.textContent = pred.disease_name;
       scientificTitle.textContent = pred.scientific_name;
       confidenceText.textContent = `${Number(pred.confidence).toFixed(5)}%`;
-      diseaseDesc.textContent = pred.description;
+      if (diseaseDesc) {
+        diseaseDesc.textContent = pred.description;
+      }
 
       // Colores según severidad
       if (pred.color === 'emerald') {
-        cardHeader.className = 'px-6 py-4 border-b flex items-center justify-between bg-emerald-50/50 border-emerald-100';
+        cardHeader.className = 'px-6 py-4 flex items-center justify-between bg-emerald-50/50 border-emerald-100';
         severityBadge.className = 'inline-block px-2.5 py-0.5 rounded-full text-[11px] font-bold tracking-wide uppercase mb-1 bg-emerald-100 text-emerald-800';
         severityBadge.textContent = 'Saludable';
         confidenceText.className = 'text-2xl font-black text-emerald-600';
       } else if (pred.color === 'amber') {
-        cardHeader.className = 'px-6 py-4 border-b flex items-center justify-between bg-amber-50/50 border-amber-100';
+        cardHeader.className = 'px-6 py-4 flex items-center justify-between bg-amber-50/50 border-amber-100';
         severityBadge.className = 'inline-block px-2.5 py-0.5 rounded-full text-[11px] font-bold tracking-wide uppercase mb-1 bg-amber-100 text-amber-800';
         severityBadge.textContent = 'Riesgo Moderado';
         confidenceText.className = 'text-2xl font-black text-amber-600';
       } else {
-        cardHeader.className = 'px-6 py-4 border-b flex items-center justify-between bg-red-50/50 border-red-100';
+        cardHeader.className = 'px-6 py-4 flex items-center justify-between bg-red-50/50 border-red-100';
         severityBadge.className = 'inline-block px-2.5 py-0.5 rounded-full text-[11px] font-bold tracking-wide uppercase mb-1 bg-red-100 text-red-800';
         severityBadge.textContent = 'Riesgo Alto / Crítico';
         confidenceText.className = 'text-2xl font-black text-red-600';
       }
 
-      // Lista de recomendaciones
-      recommendationsList.innerHTML = '';
-      pred.recommendations.forEach(rec => {
-        const li = document.createElement('li');
-        li.className = 'flex items-start gap-2 bg-slate-50 p-2.5 rounded-lg border border-slate-100';
-        li.innerHTML = `
-          <i class="fa-solid fa-check text-emerald-500 mt-0.5 text-xs"></i>
-          <span>${rec}</span>
-        `;
-        recommendationsList.appendChild(li);
-      });
+      // Lista de recomendaciones (solo si el elemento existe en el DOM)
+      if (recommendationsList) {
+        recommendationsList.innerHTML = '';
+        (pred.recommendations || []).forEach(rec => {
+          const li = document.createElement('li');
+          li.className = 'flex items-start gap-2 bg-slate-50 p-2.5 rounded-lg border border-slate-100';
+          li.innerHTML = `
+            <i class="fa-solid fa-check text-emerald-500 mt-0.5 text-xs"></i>
+            <span>${rec}</span>
+          `;
+          recommendationsList.appendChild(li);
+        });
+      }
 
       // Barras de desglose
       probabilityBars.innerHTML = '';
@@ -451,11 +785,433 @@
         probabilityBars.appendChild(barDiv);
       });
 
+      // Renderizar recomendación LLM + RL
+      const llmText = data.llm_recommendation || '';
+      const llmInfo = data.llm_info || {};
+      const rlInfo = data.rl_info || {};
+      const strategyKey = rlInfo.strategy || llmInfo.strategy || 'practico';
+
+      lastDiagnosis = {
+        disease_id: pred.disease_id || rlInfo.state || '',
+        disease_name: pred.disease_name || '',
+        scientific_name: pred.scientific_name || '',
+        confidence: Number(pred.confidence || 0),
+        severity: pred.severity || '',
+        breakdown: data.breakdown || [],
+        strategy: strategyKey,
+        initial_recommendation: llmText,
+      };
+      chatHistory = [];
+      resetChatWidget();
+
+      updateLlmCardView(llmText, llmInfo, rlInfo);
+      resetFeedbackWidget();
+      loadRlStats();
+
       // Scroll suave a los resultados en móviles
       if (window.innerWidth < 1024) {
         activeResultState.scrollIntoView({ behavior: 'smooth' });
       }
     }
+
+    function updateLlmCardView(llmText, llmInfo, rlInfo) {
+      const strategyKey = rlInfo.strategy || llmInfo.strategy || 'practico';
+      if (lastDiagnosis) {
+        lastDiagnosis.strategy = strategyKey;
+        lastDiagnosis.initial_recommendation = llmText;
+      }
+
+      const llmProviderBadge = document.getElementById('llmProviderBadge');
+      const rlStrategyBadge = document.getElementById('rlStrategyBadge');
+      const rlModeBadge = document.getElementById('rlModeBadge');
+      const llmCharCountBadge = document.getElementById('llmCharCountBadge');
+      const llmRecommendationText = document.getElementById('llmRecommendationText');
+      const llmFallbackNote = document.getElementById('llmFallbackNote');
+
+      const providerLabel = llmInfo.provider === 'gemini'
+        ? 'Gemini'
+        : (llmInfo.provider === 'deepseek' ? 'DeepSeek' : 'Fallback Local');
+      llmProviderBadge.textContent = `${providerLabel} · ${llmInfo.model || 'estándar'}`;
+
+      rlStrategyBadge.textContent = `Estrategia: ${STRATEGY_LABELS[strategyKey] || strategyKey}`;
+
+      const isManual = rlInfo.mode === 'manual';
+      const isExplore = Boolean(rlInfo.is_exploration || rlInfo.mode === 'exploration');
+      rlModeBadge.textContent = rlInfo.mode_label || (isManual ? 'Selección Manual' : (isExplore ? 'Exploración' : 'Explotación'));
+      rlModeBadge.className = isManual
+        ? 'inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-purple-100 text-purple-800 border border-purple-200'
+        : (isExplore
+          ? 'inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-amber-100 text-amber-800 border border-amber-200'
+          : 'inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-sky-100 text-sky-800 border border-sky-200');
+
+      const charCount = Number(llmInfo.char_count || llmText.length);
+      llmCharCountBadge.textContent = `${charCount} caracteres (> 200)`;
+      llmCharCountBadge.className = charCount > 200
+        ? 'inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-mono font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200'
+        : 'inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-mono font-semibold bg-red-100 text-red-800 border border-red-200';
+
+      llmRecommendationText.innerHTML = renderMarkdown(llmText);
+
+      // Resaltar botón de estrategia activa
+      document.querySelectorAll('.strategy-switch-btn').forEach((btn) => {
+        const key = btn.getAttribute('data-switch-strategy');
+        if (key === strategyKey) {
+          btn.classList.add('ring-2', 'ring-indigo-500', 'bg-indigo-50', 'text-indigo-800', 'border-indigo-300');
+        } else if (key !== 'auto') {
+          btn.classList.remove('ring-2', 'ring-indigo-500', 'bg-indigo-50', 'text-indigo-800', 'border-indigo-300');
+        }
+      });
+
+      if (llmInfo.fallback_reason) {
+        llmFallbackNote.innerHTML = `<i class="fa-solid fa-circle-info"></i> <span>${escapeHtml(llmInfo.fallback_reason)}</span>`;
+        llmFallbackNote.classList.remove('hidden');
+      } else {
+        llmFallbackNote.classList.add('hidden');
+        llmFallbackNote.innerHTML = '';
+      }
+    }
+
+    // --- Widget Interactivo de Estrellas (Feedback RL) ---
+    const starButtons = Array.from(document.querySelectorAll('#starRatingContainer .star-btn'));
+    const ratingLabel = document.getElementById('ratingLabel');
+    const feedbackComment = document.getElementById('feedbackComment');
+    const submitFeedbackBtn = document.getElementById('submitFeedbackBtn');
+    const feedbackStatus = document.getElementById('feedbackStatus');
+
+    function paintStars(activeCount) {
+      starButtons.forEach((btn) => {
+        const val = Number(btn.dataset.rating);
+        if (val <= activeCount) {
+          btn.classList.remove('text-slate-300', 'bg-slate-50', 'border-slate-200');
+          btn.classList.add('text-amber-400', 'bg-amber-50', 'border-amber-300');
+        } else {
+          btn.classList.add('text-slate-300', 'bg-slate-50', 'border-slate-200');
+          btn.classList.remove('text-amber-400', 'bg-amber-50', 'border-amber-300');
+        }
+      });
+    }
+
+    function resetFeedbackWidget() {
+      selectedRating = 0;
+      feedbackSubmitted = false;
+      paintStars(0);
+      ratingLabel.textContent = 'Selecciona de 1 a 5 estrellas';
+      feedbackComment.value = '';
+      feedbackComment.disabled = false;
+      starButtons.forEach((b) => { b.disabled = false; });
+
+      submitFeedbackBtn.disabled = true;
+      submitFeedbackBtn.className = 'py-2 px-4 rounded-xl bg-slate-200 text-slate-400 font-semibold text-xs cursor-not-allowed transition-all flex items-center gap-2';
+      submitFeedbackBtn.innerHTML = '<i class="fa-solid fa-paper-plane"></i><span>Enviar Calificación</span>';
+
+      feedbackStatus.className = 'hidden text-xs font-medium px-3 py-1.5 rounded-lg';
+      feedbackStatus.textContent = '';
+    }
+
+    starButtons.forEach((btn) => {
+      const ratingVal = Number(btn.dataset.rating);
+      btn.addEventListener('mouseenter', () => {
+        if (!feedbackSubmitted) paintStars(ratingVal);
+      });
+      btn.addEventListener('mouseleave', () => {
+        if (!feedbackSubmitted) paintStars(selectedRating);
+      });
+      btn.addEventListener('click', () => {
+        if (feedbackSubmitted) return;
+        selectedRating = ratingVal;
+        paintStars(selectedRating);
+        ratingLabel.textContent = RATING_LABELS[selectedRating] || `${selectedRating} estrellas`;
+        submitFeedbackBtn.disabled = false;
+        submitFeedbackBtn.className = 'py-2 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs transition-all flex items-center gap-2 shadow-sm';
+      });
+    });
+
+    submitFeedbackBtn.addEventListener('click', async () => {
+      if (feedbackSubmitted || !lastDiagnosis || !lastDiagnosis.disease_id || selectedRating < 1 || selectedRating > 5) {
+        return;
+      }
+
+      submitFeedbackBtn.disabled = true;
+      submitFeedbackBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i><span>Guardando...</span>';
+
+      try {
+        const response = await fetch('/feedback', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            disease_id: lastDiagnosis.disease_id,
+            strategy: lastDiagnosis.strategy,
+            rating: selectedRating,
+            comment: feedbackComment.value.trim(),
+          }),
+        });
+        const result = await response.json();
+        if (!response.ok) {
+          const detailMsg = result.error || (Array.isArray(result.detail) ? result.detail.map(d => d.msg).join('; ') : result.detail);
+          throw new Error(detailMsg || 'No se pudo registrar la calificación.');
+        }
+
+        feedbackSubmitted = true;
+        feedbackComment.disabled = true;
+        starButtons.forEach((b) => { b.disabled = true; });
+        submitFeedbackBtn.className = 'py-2 px-4 rounded-xl bg-emerald-100 text-emerald-800 font-semibold text-xs cursor-default flex items-center gap-2 border border-emerald-200';
+        submitFeedbackBtn.innerHTML = '<i class="fa-solid fa-check"></i><span>Calificación Registrada</span>';
+
+        const upd = result.update || {};
+        const rewardStr = Number(upd.reward ?? 0) >= 0 ? `+${Number(upd.reward ?? 0).toFixed(2)}` : Number(upd.reward ?? 0).toFixed(2);
+        feedbackStatus.className = 'text-xs font-medium px-3 py-1.5 rounded-lg bg-emerald-50 text-emerald-800 border border-emerald-200';
+        feedbackStatus.textContent = `Recompensa r = ${rewardStr} · Q(s,a): ${Number(upd.q_before ?? 0).toFixed(3)} → ${Number(upd.q_after ?? 0).toFixed(3)}`;
+
+        if (result.stats) {
+          renderRlStats(result.stats);
+        } else {
+          loadRlStats();
+        }
+      } catch (err) {
+        submitFeedbackBtn.disabled = false;
+        submitFeedbackBtn.className = 'py-2 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs transition-all flex items-center gap-2 shadow-sm';
+        submitFeedbackBtn.innerHTML = '<i class="fa-solid fa-paper-plane"></i><span>Enviar Calificación</span>';
+        feedbackStatus.className = 'text-xs font-medium px-3 py-1.5 rounded-lg bg-red-50 text-red-700 border border-red-200';
+        feedbackStatus.textContent = err.message;
+      }
+    });
+
+    // --- Panel de Métricas RL en Vivo ---
+    async function loadRlStats() {
+      try {
+        const res = await fetch('/rl-stats');
+        if (!res.ok) return;
+        const stats = await res.json();
+        renderRlStats(stats);
+      } catch (err) {
+        console.error('Error al cargar métricas RL:', err);
+      }
+    }
+
+    function renderRlStats(stats) {
+      const rlEpsilonBadge = document.getElementById('rlEpsilonBadge');
+      const rlTotalFeedbacks = document.getElementById('rlTotalFeedbacks');
+      const rlAvgReward = document.getElementById('rlAvgReward');
+      const rlQTableBody = document.getElementById('rlQTableBody');
+      const rlRecentFeedback = document.getElementById('rlRecentFeedback');
+
+      rlEpsilonBadge.textContent = `ε = ${Number(stats.epsilon ?? 0.2).toFixed(2)}`;
+      rlTotalFeedbacks.textContent = String(stats.total_feedbacks ?? 0);
+
+      const avg = Number(stats.average_reward ?? 0);
+      rlAvgReward.textContent = (avg >= 0 ? '+' : '') + avg.toFixed(3);
+      rlAvgReward.className = avg > 0
+        ? 'text-lg font-extrabold text-emerald-600 font-mono'
+        : (avg < 0 ? 'text-lg font-extrabold text-red-600 font-mono' : 'text-lg font-extrabold text-slate-700 font-mono');
+
+      const qTable = stats.q_table || {};
+      const counts = stats.counts || {};
+      const actions = stats.actions || ['tecnico', 'practico', 'ecologico'];
+      const states = stats.states || Object.keys(qTable);
+
+      rlQTableBody.innerHTML = '';
+      states.forEach((stateKey) => {
+        const row = qTable[stateKey] || {};
+        const countRow = counts[stateKey] || {};
+        const isCurrentState = lastDiagnosis && lastDiagnosis.disease_id === stateKey;
+
+        const tr = document.createElement('tr');
+        tr.className = isCurrentState ? 'bg-indigo-50/50' : '';
+
+        let cellsHtml = `<td class="py-2 px-2.5 font-semibold text-slate-700">${escapeHtml(STATE_LABELS[stateKey] || stateKey)}</td>`;
+        actions.forEach((act) => {
+          const qVal = Number(row[act] ?? 0);
+          const nVal = Number(countRow[act] ?? 0);
+          const isCurrentCell = isCurrentState && lastDiagnosis.strategy === act;
+          const qColor = qVal > 0 ? 'text-emerald-700' : (qVal < 0 ? 'text-red-600' : 'text-slate-600');
+          const highlight = isCurrentCell ? 'bg-indigo-100/80 ring-1 ring-inset ring-indigo-300 font-bold' : '';
+          cellsHtml += `<td class="py-2 px-2 text-center font-mono ${highlight}">
+            <span class="${qColor}">${qVal.toFixed(2)}</span>
+            <span class="block text-[10px] text-slate-400">n=${nVal}</span>
+          </td>`;
+        });
+        tr.innerHTML = cellsHtml;
+        rlQTableBody.appendChild(tr);
+      });
+
+      const recent = Array.isArray(stats.recent_feedback) ? stats.recent_feedback.slice(-4).reverse() : [];
+      rlRecentFeedback.innerHTML = '';
+      if (recent.length === 0) {
+        rlRecentFeedback.innerHTML = '<li class="text-slate-400 italic">Aún no hay calificaciones registradas.</li>';
+      } else {
+        recent.forEach((item) => {
+          const li = document.createElement('li');
+          li.className = 'flex items-center justify-between gap-2 bg-slate-50 px-2.5 py-1.5 rounded-lg border border-slate-100';
+          const stateText = STATE_LABELS[item.state] || item.state;
+          const actText = STRATEGY_LABELS[item.action] || item.action;
+          const commentHtml = item.comment ? ` · <span class="italic text-slate-500">"${escapeHtml(item.comment)}"</span>` : '';
+          li.innerHTML = `
+            <span class="truncate"><strong class="text-slate-700">${escapeHtml(stateText)}</strong> · ${escapeHtml(actText)}${commentHtml}</span>
+            <span class="shrink-0 font-mono font-semibold text-amber-600">${Number(item.rating)}★ (${Number(item.reward) >= 0 ? '+' : ''}${Number(item.reward).toFixed(1)})</span>
+          `;
+          rlRecentFeedback.appendChild(li);
+        });
+      }
+    }
+
+    // --- Cambio de estrategia en vivo (/regenerate) ---
+    document.querySelectorAll('.strategy-switch-btn').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        if (!lastDiagnosis || !lastDiagnosis.disease_id) return;
+        const targetStrategy = btn.getAttribute('data-switch-strategy') || 'auto';
+        const llmRecommendationText = document.getElementById('llmRecommendationText');
+        llmRecommendationText.innerHTML = '<div class="flex items-center gap-2 text-indigo-600 text-xs font-semibold py-2"><i class="fa-solid fa-spinner fa-spin"></i> Generando recomendación con estrategia seleccionada...</div>';
+
+        try {
+          const response = await fetch('/regenerate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              disease_id: lastDiagnosis.disease_id,
+              disease_name: lastDiagnosis.disease_name,
+              scientific_name: lastDiagnosis.scientific_name,
+              confidence: lastDiagnosis.confidence,
+              severity: lastDiagnosis.severity,
+              breakdown: lastDiagnosis.breakdown,
+              strategy: targetStrategy,
+            }),
+          });
+          const data = await response.json();
+          if (!response.ok) {
+            throw new Error(data.error || 'No se pudo regenerar la recomendación.');
+          }
+          updateLlmCardView(data.llm_recommendation || '', data.llm_info || {}, data.rl_info || {});
+          resetFeedbackWidget();
+          loadRlStats();
+        } catch (err) {
+          llmRecommendationText.innerHTML = renderMarkdown(lastDiagnosis.initial_recommendation || '');
+          alert('Error al cambiar estrategia: ' + err.message);
+        }
+      });
+    });
+
+    // --- Chat de Seguimiento (/chat) ---
+    const chatMessagesContainer = document.getElementById('chatMessagesContainer');
+    const chatInput = document.getElementById('chatInput');
+    const sendChatBtn = document.getElementById('sendChatBtn');
+    const clearChatBtn = document.getElementById('clearChatBtn');
+
+    function resetChatWidget() {
+      chatHistory = [];
+      if (chatMessagesContainer) {
+        chatMessagesContainer.innerHTML = '';
+        chatMessagesContainer.classList.add('hidden');
+      }
+      if (chatInput) {
+        chatInput.value = '';
+        chatInput.disabled = false;
+      }
+      if (sendChatBtn) {
+        sendChatBtn.disabled = false;
+      }
+    }
+
+    function appendChatMessage(role, content, metaLabel = '') {
+      if (!chatMessagesContainer) return;
+      chatMessagesContainer.classList.remove('hidden');
+
+      const wrapper = document.createElement('div');
+      if (role === 'user') {
+        wrapper.className = 'flex justify-end';
+        wrapper.innerHTML = `
+          <div class="max-w-[85%] rounded-2xl rounded-tr-sm bg-indigo-600 text-white px-3.5 py-2.5 text-xs shadow-sm">
+            <p class="leading-relaxed whitespace-pre-line">${escapeHtml(content)}</p>
+          </div>
+        `;
+      } else {
+        wrapper.className = 'flex justify-start';
+        const badgeHtml = metaLabel
+          ? `<div class="text-[10px] font-semibold text-indigo-600 mb-1 flex items-center gap-1"><i class="fa-solid fa-robot"></i> ${escapeHtml(metaLabel)}</div>`
+          : `<div class="text-[10px] font-semibold text-indigo-600 mb-1 flex items-center gap-1"><i class="fa-solid fa-robot"></i> AgroScan AI</div>`;
+        wrapper.innerHTML = `
+          <div class="max-w-[92%] rounded-2xl rounded-tl-sm bg-white border border-slate-200 px-3.5 py-2.5 text-xs text-slate-700 shadow-2xs">
+            ${badgeHtml}
+            <div class="markdown-body leading-relaxed">${renderMarkdown(content)}</div>
+          </div>
+        `;
+      }
+      chatMessagesContainer.appendChild(wrapper);
+      chatMessagesContainer.scrollTop = chatMessagesContainer.scrollHeight;
+    }
+
+    async function sendChatMessage(rawQuestion) {
+      if (!lastDiagnosis || !lastDiagnosis.disease_id) return;
+      const question = String(rawQuestion ?? chatInput.value ?? '').trim();
+      if (!question) return;
+
+      chatInput.value = '';
+      chatInput.disabled = true;
+      sendChatBtn.disabled = true;
+      sendChatBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i><span>Pensando...</span>';
+
+      appendChatMessage('user', question);
+
+      try {
+        const response = await fetch('/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            disease_id: lastDiagnosis.disease_id,
+            disease_name: lastDiagnosis.disease_name,
+            scientific_name: lastDiagnosis.scientific_name,
+            confidence: lastDiagnosis.confidence,
+            severity: lastDiagnosis.severity,
+            strategy: lastDiagnosis.strategy,
+            initial_recommendation: lastDiagnosis.initial_recommendation,
+            history: chatHistory,
+            message: question,
+          }),
+        });
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.error || 'Error al consultar al asistente.');
+        }
+
+        const replyText = data.reply || '';
+        const info = data.llm_info || {};
+        const stratName = STRATEGY_LABELS[lastDiagnosis.strategy] || lastDiagnosis.strategy;
+        appendChatMessage('assistant', replyText, `AgroScan AI · ${stratName}`);
+
+        chatHistory.push({ role: 'user', content: question });
+        chatHistory.push({ role: 'assistant', content: replyText });
+      } catch (err) {
+        appendChatMessage('assistant', `**Error:** No se pudo procesar la consulta (${err.message}).`, 'Sistema');
+      } finally {
+        chatInput.disabled = false;
+        sendChatBtn.disabled = false;
+        sendChatBtn.innerHTML = '<i class="fa-solid fa-paper-plane"></i><span>Preguntar</span>';
+        chatInput.focus();
+      }
+    }
+
+    if (sendChatBtn) {
+      sendChatBtn.addEventListener('click', () => sendChatMessage());
+    }
+    if (chatInput) {
+      chatInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+          e.preventDefault();
+          sendChatMessage();
+        }
+      });
+    }
+    if (clearChatBtn) {
+      clearChatBtn.addEventListener('click', () => resetChatWidget());
+    }
+    document.querySelectorAll('.chat-suggestion-btn').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        sendChatMessage(btn.textContent.trim());
+      });
+    });
+
+    document.addEventListener('DOMContentLoaded', () => {
+      loadRlStats();
+    });
   </script>
 </body>
 </html>
